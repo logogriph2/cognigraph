@@ -1122,6 +1122,7 @@ class MneGcs(InverseModel):
 
     def _initialize(self):
         InverseModel._initialize(self)
+        print('FINISH INITIALIZE INVERSE MODEL')
         self.fwd = mne.convert_forward_solution(
             self.fwd, force_fixed=True, surf_ori=True)
 

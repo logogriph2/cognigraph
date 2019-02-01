@@ -33,6 +33,8 @@ class Pipeline(object):
         self._inputs_of_outputs = list()  # type: List[(SourceNode, ProcessorNode)]
         self.logger = logging.getLogger(type(self).__name__)
 
+        self._mapping = None
+
     @property
     def source(self):
         return self._source
@@ -43,6 +45,7 @@ class Pipeline(object):
         self._source = input_node
         self._reconnect_the_first_processor(input_node)
         self._reconnect_outputs_to_last_node()  # In case some outputs were added before anything else
+        self.source._pipeline = self
 
     @property
     def all_nodes(self) -> List[Node]:
@@ -112,6 +115,7 @@ class Pipeline(object):
         self.logger.debug('Finish in {:.1f} ms'.format((t2 - t1) * 1000))
 
     def run(self):
+        self.logger.info('run here')
         while self.source.is_alive:  # TODO: also stop if all outputs are dead
             for node in self.all_nodes:
                 node.update()

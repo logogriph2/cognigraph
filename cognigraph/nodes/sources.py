@@ -30,6 +30,7 @@ class FixedStreamInlet(lsl.StreamInlet):
         lsl.pylsl.handle_error(errcode)
         return FixedStreamInfo(handle=result) # StreamInfo(handle=result)
 
+
 class LSLStreamSource(SourceNode):
     """ Class for reading data from an LSL stream defined by its name """
 
@@ -77,8 +78,11 @@ class LSLStreamSource(SourceNode):
             self.dtype = DTYPE
             channel_labels, channel_types = read_channel_labels_from_info(
                 self._inlet.info())
+            print('nodes.sources LSLStreamSources channel_labels', channel_labels)
             self.mne_info = mne.create_info(channel_labels, frequency,
                                             ch_types=channel_types)
+            if self._pipeline._mapping is not None:
+                mne.rename_channels(self.mne_info, self._pipeline._mapping)
 
     def _update(self):
         lsl_chunk, timestamps = self._inlet.pull_chunk()
@@ -157,10 +161,11 @@ class FileSource(SourceNode):
                         'Cannot read {}.'.format(basename) +
                         'Extension must be one of the following: {}'.format(
                             self.SUPPORTED_EXTENSIONS.values()))
-
-
+            if self._pipeline._mapping is not None:
+                mne.rename_channels(self.mne_info, self._pipeline._mapping)
             self.dtype = DTYPE
             self.data = self.data.astype(self.dtype)
+            print(self.mne_info["ch_names"])
 
     def _update(self):
         if self.data is None:

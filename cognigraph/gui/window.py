@@ -8,6 +8,9 @@ import logging
 logger = logging.getLogger(name=__name__)
 
 
+from .montage_menu import MontageMenu
+
+
 class GUIWindow(QtWidgets.QMainWindow):
     def __init__(self, pipeline=Pipeline()):
         super().__init__()
@@ -54,6 +57,10 @@ class GUIWindow(QtWidgets.QMainWindow):
 
     def initialize(self):
         logger.debug('Initializing all nodes')
+        """---------------check inverse model here----------------------"""
+        self.mapping = None
+        self.check_channels()
+        """-------------------------------------------------------------"""
         self._pipeline.initialize_all_nodes()
         for node_widget in self._node_widgets:
             if node_widget:
@@ -106,3 +113,76 @@ class GUIWindow(QtWidgets.QMainWindow):
             except AttributeError:
                 pass
         return node_widgets
+
+    def check_channels(self):
+
+        import mne
+        import os.path
+        from ..helpers.misc import all_upper
+        SUPPORTED_EXTENSIONS = {'Brainvision': ('.vhdr', '.eeg', '.vmrk'),
+                                'MNE-python': ('.fif',),
+                                'European Data Format': ('.edf',)}
+
+        #source_channels = []
+        #inverse_model_channels = []
+
+        source_mne_info = None
+
+
+        if self._pipeline.source is not None:
+            if hasattr(self._pipeline.source,'mne_info'):
+                if self._pipeline.source.mne_info is not None:
+                    print('SOURCE MNE INFO',self._pipeline.source.mne_info)
+                    return
+            if hasattr(self._pipeline.source,'_file_path'):
+                #print('SOURCE FILE PATH',self._pipeline.source._file_path)
+                basename = os.path.basename(self._pipeline.source._file_path)
+                _, ext = os.path.splitext(basename)
+
+                if ext in SUPPORTED_EXTENSIONS['Brainvision']:
+                    raw = mne.io.read_raw_brainvision(vhdr_fname=self._pipeline.source._file_path,
+                                                      verbose='ERROR')
+                elif ext in SUPPORTED_EXTENSIONS['MNE-python']:
+                    raw = mne.io.Raw(fname=self._pipeline.source._file_path, verbose='ERROR')
+
+                elif ext in SUPPORTED_EXTENSIONS['European Data Format']:
+                    raw = mne.io.edf.read_raw_edf(input_fname=self._pipeline.source._file_path, preload=True,
+                                                  verbose='ERROR', stim_channel=-1,misc=[128, 129, 130])
+                else:
+                    raise ValueError(
+                        'Cannot read {}.'.format(basename) +
+                        'Extension must be one of the following: {}'.format(
+                            self.SUPPORTED_EXTENSIONS.values()))
+                source_mne_info = raw.info
+                self.source_ch_names = source_mne_info['ch_names']
+                self.source_bads = source_mne_info['bads']
+
+        for _processor in self._pipeline._processors:
+            if hasattr(_processor, 'mne_forward_model_file_path'):
+                if _processor.mne_forward_model_file_path is not None:
+                    #print('PROCESSOR FORWARD MODEL FILE PATH', _processor.mne_forward_model_file_path)
+                    """---------------read-forward-file------------------------"""
+                    f, tree, _ = mne.io.fiff_open(_processor.mne_forward_model_file_path)
+                    with f as fid:
+                        forward_mne_info = mne.forward._read_forward_meas_info(tree, fid)
+                    '''---------------------------------------------'''
+                    self.forward_ch_names = forward_mne_info['ch_names']
+                    self.forward_bads = forward_mne_info["bads"]
+
+        #source_bad_channels = source_mne_info['bads']
+
+        source_goods = mne.pick_types(source_mne_info, eeg=True, stim=False, eog=False,
+                               ecg=False, exclude='bads')
+        source_ch_names_data = [self.source_ch_names[i] for i in source_goods]
+        # Take only channels from both mne_info and the forward solution
+        ch_names_intersect = [n for n in self.forward_ch_names if
+                              n.upper() in all_upper(source_ch_names_data)]
+        missing_ch_names = [n for n in source_ch_names_data if
+                            n.upper() not in all_upper(self.forward_ch_names)]
+
+        if len(missing_ch_names)>0:
+            self.montage_menu = MontageMenu(source_ch_names=self.source_ch_names,
+                                            forward_ch_names=self.forward_ch_names, source_bads =self.source_bads, forward_bads =self.forward_bads, main_menu=self)
+            self.montage_menu.exec()
+            self.montage_menu.exec()
+

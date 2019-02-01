@@ -152,11 +152,17 @@ def make_inverse_operator(fwd, mne_info, sigma2=1):
     # The inverse operator will use channels common to
     # forward_model_file_path and mne_info.
 
+    #print('inverse_model.py, 155, mne_info', print(mne_info))
+    print('CALL inverse_model 156')
+    print(mne_info["ch_names"])
+
     picks = mne.pick_types(mne_info, eeg=True, meg=False, exclude='bads')
+    #print('inverse_model.py, 159, picks', print(picks))
     info_goods = mne.pick_info(mne_info, sel=picks)
 
     N_SEN = fwd['nchan']
     ch_names = info_goods['ch_names']
+    #print('inverse_model ch_names: ', ch_names);
     cov_data = np.identity(N_SEN)
     cov = mne.Covariance(cov_data, ch_names, mne_info['bads'],
                          mne_info['projs'], nfree=1)

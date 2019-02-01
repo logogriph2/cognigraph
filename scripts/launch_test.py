@@ -18,7 +18,7 @@ np.warnings.filterwarnings('ignore')  # noqa
 # ----------------------------- setup logging  ----------------------------- #
 logfile = None
 format = '%(asctime)s:%(name)-17s:%(levelname)s:%(message)s'
-logging.basicConfig(level=logging.DEBUG, filename=logfile, format=format)
+logging.basicConfig(level=logging.INFO, filename=logfile, format=format)
 logger = logging.getLogger(__name__)
 mne.set_log_level('INFO')
 mne.set_log_file(fname=logfile, output_format=format)
@@ -37,7 +37,7 @@ sys.path.append('../vendor/nfb')  # For nfb submodule
 
 SURF_DIR = op.join(mne.datasets.sample.data_path(), 'subjects')
 SUBJECT = 'sample'
-DATA_DIR = '/home/dmalt/Code/python/cogni_submodules/tests/data'
+DATA_DIR = '../tests/data'
 FWD_MODEL_NAME = 'dmalt_custom_mr-fwd.fif'
 
 
@@ -109,16 +109,16 @@ def assemble_pipeline(file_path, inverse_method='mne'):
         limits_mode=global_mode, buffer_length=6,
         surfaces_dir=op.join(SURF_DIR, SUBJECT))
 
-    pipeline.add_output(seed_viewer, input_node=aec_env)
+    #pipeline.add_output(seed_viewer, input_node=aec_env)
 
     # pipeline.add_output(outputs.LSLStreamOutput())
     # signal_viewer = outputs.SignalViewer()
     # signal_viewer_src = outputs.SignalViewer()
     # pipeline.add_output(signal_viewer, input_node=linear_filter)
     # pipeline.add_output(signal_viewer_src, input_node=roi_average)
-    # con_viewer = outputs.ConnectivityViewer(
+    #con_viewer = outputs.ConnectivityViewer(
     #     surfaces_dir=op.join(SURF_DIR, SUBJECT))
-    # pipeline.add_output(con_viewer, input_node=aec)
+    #pipeline.add_output(con_viewer, input_node=aec)
     # --------------------------------------------------------------------- #
     return pipeline
 

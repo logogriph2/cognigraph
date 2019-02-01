@@ -358,6 +358,7 @@ class SourceNode(Node):
 
     def __init__(self):
         super().__init__()
+        self._pipeline = None
         self.mne_info = None  # type: mne.Info
 
     def initialize(self):

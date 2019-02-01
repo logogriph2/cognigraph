@@ -27,7 +27,7 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger(__name__)
 pipeline = Pipeline()
 
-cur_dir = '/home/dmalt/Code/python/cogni_submodules'
+cur_dir = '..'
 test_data_path = cur_dir + '/tests/data/'
 print(test_data_path)
 sim_data_fname = 'raw_sim_nobads.fif'
@@ -38,7 +38,7 @@ fwd_fname = 'dmalt_custom_mr-fwd.fif'
 # fwd_fname = 'sample_1005-eeg-oct-6-fwd.fif'
 # fwd_fname = 'DF_2018-03-02_11-34-38-fwd.fif'
 
-surf_dir = '/home/dmalt/mne_data/MNE-sample-data/subjects/sample/surf'
+surf_dir = r'C:\Users\MSI User/mne_data/MNE-sample-data/subjects/sample/'
 
 fwd_path = op.join(test_data_path, fwd_fname)
 sim_data_path = op.join(test_data_path, sim_data_fname)
