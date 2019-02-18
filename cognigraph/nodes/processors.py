@@ -57,6 +57,7 @@ class Preprocessing(ProcessorNode):
         self._reset_statistics()
 
     def _initialize(self):
+        self._reset_statistics()
         self.mne_info = self.traverse_back_and_find('mne_info')
         frequency = self.mne_info['sfreq']
         self._samples_to_be_collected = int(math.ceil(
@@ -88,6 +89,7 @@ class Preprocessing(ProcessorNode):
         self.output = self.input_node.output
 
     def _reset(self) -> bool:
+        print('RESET')
         self._reset_statistics()
         self._input_history_is_no_longer_valid = True
         return self._input_history_is_no_longer_valid
@@ -298,6 +300,7 @@ class EnvelopeExtractor(ProcessorNode):
         self._envelope_extractor = None  # type: ExponentialMatrixSmoother
 
     def _initialize(self):
+        print('ENVELOP INITIALIZER', '\nNCHAN',self.traverse_back_and_find('mne_info')['nchan'])
         channel_count = self.traverse_back_and_find('mne_info')['nchan']
         self._envelope_extractor = ExponentialMatrixSmoother(
             factor=self.factor, column_count=channel_count)
@@ -1122,7 +1125,6 @@ class MneGcs(InverseModel):
 
     def _initialize(self):
         InverseModel._initialize(self)
-        print('FINISH INITIALIZE INVERSE MODEL')
         self.fwd = mne.convert_forward_solution(
             self.fwd, force_fixed=True, surf_ori=True)
 

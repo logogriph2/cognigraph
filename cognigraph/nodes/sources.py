@@ -15,6 +15,8 @@ from ..helpers.brainvision import (read_brain_vision_data,
                                    read_fif_data,
                                    read_edf_data)
 
+import h5py
+
 
 class FixedStreamInfo(lsl.StreamInfo):
     def as_xml(self):
@@ -89,6 +91,128 @@ class LSLStreamSource(SourceNode):
         self.output = convert_lsl_chunk_to_numpy_array(lsl_chunk,
                                                        dtype=self.dtype)
 
+
+class FileSourceSource(SourceNode):
+    SUPPORTED_EXTENSIONS = {'Brainvision': ('.vhdr', '.eeg', '.vmrk'),
+                            'Neurobotics': ('.h5',),
+                            'European Data Format': ('.edf',)}
+
+    CHANGES_IN_THESE_REQUIRE_RESET = ('source_name', )
+
+    MAX_SAMPLES_IN_CHUNK = 1024
+
+    def __init__(self, file_path=None, fwd_path=None):
+        super().__init__()
+        self.source_name = None
+        self.__file_path = None
+        self.file_path = file_path  # This will also populate self.source_name
+        self.data = None  # type: np.ndarray
+        self.loop_the_file = False
+        self.is_alive = True
+
+        self._time_of_the_last_update = None
+        self._samples_already_read = None
+        self.mne_forward_model_file_path = fwd_path
+
+    @property
+    def file_path(self):
+        return self.__file_path
+
+    @property
+    def fwd_path(self):
+        return self.mne_forward_model_file_path
+
+    @fwd_path.setter
+    def fwd_path(self, fwd_path):
+        self.mne_forward_model_file_path = fwd_path
+
+    @file_path.setter
+    def file_path(self, file_path):
+        if file_path in (None, ''):
+            self.__file_path = None
+            self.source_name = None
+        else:
+            basename = os.path.basename(file_path)
+            file_name, extension = os.path.splitext(basename)
+
+            print('file_name', file_name, 'extenstion', extension)
+
+            all_ext = ()
+            for ext_group in self.SUPPORTED_EXTENSIONS.keys():
+                print(self.SUPPORTED_EXTENSIONS[ext_group])
+                all_ext = all_ext + self.SUPPORTED_EXTENSIONS[ext_group]
+
+            if extension not in all_ext:
+                raise ValueError(
+                    'Cannot read {}.'.format(basename) +
+                    'Extension must be one of: {}'.format(all_ext))
+            else:
+                self.__file_path = file_path
+                self.source_name = file_name
+
+    def _initialize(self):
+        self._time_of_the_last_update = None
+        self._samples_already_read = 0
+
+        if self.file_path is not None:
+            basename = os.path.basename(self.file_path)
+            _, ext = os.path.splitext(basename)
+
+            if ext in self.SUPPORTED_EXTENSIONS['Neurobotics']:
+                self.data, self.mne_info = self.read_source_data(
+                        file_path=self.file_path, time_axis=TIME_AXIS)
+            else:
+                raise ValueError(
+                        'Cannot read {}.'.format(basename) +
+                        'Extension must be one of the following: {}'.format(
+                            self.SUPPORTED_EXTENSIONS.values()))
+            self.dtype = DTYPE
+            self.data = self.data.astype(self.dtype)
+
+    def _update(self):
+        if self.data is None:
+            return
+
+        current_time = time.time()
+
+        if self._time_of_the_last_update is not None:
+
+            seconds_since_last_update = current_time - self._time_of_the_last_update
+            self._time_of_the_last_update = current_time
+            frequency = self.mne_info['sfreq']
+
+            # How many sample we would like to read
+            max_samples_in_chunk = np.int64(seconds_since_last_update * frequency)
+            # Lower it to the amount we can process in a reasonable amount of time
+            max_samples_in_chunk = min(max_samples_in_chunk,
+                                       self.MAX_SAMPLES_IN_CHUNK)
+
+            # We will have read max_samples_in_chunk samples unless we hit the end
+            samples_in_data = self.data.shape[TIME_AXIS]
+            stop_idx = self._samples_already_read + max_samples_in_chunk
+            self.output = get_a_time_slice(self.data, start_idx=self._samples_already_read, stop_idx=stop_idx)
+            actual_samples_in_chunk = self.output.shape[TIME_AXIS]
+            self._samples_already_read = self._samples_already_read + actual_samples_in_chunk
+
+            # If we do hit the end we need to either start again or stop completely depending on loop_the_file
+            if self._samples_already_read == samples_in_data:
+                if self.loop_the_file is True:
+                    self._samples_already_read = 0
+                else:
+                    self.is_alive = False
+
+        else:
+            self._time_of_the_last_update = current_time
+
+    def _check_value(self, key, value):
+        pass
+
+    def read_source_data(self, file_path, time_axis=TIME_AXIS):
+        file = h5py.File(file_path)
+        data = np.asarray(file['data'])
+        print(data.shape)
+        mne_info = mne.create_info(ch_names=data.shape[0], sfreq=512, ch_types='grad')
+        return data, mne_info
 
 class FileSource(SourceNode):
     SUPPORTED_EXTENSIONS = {'Brainvision': ('.vhdr', '.eeg', '.vmrk'),

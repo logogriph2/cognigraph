@@ -3,10 +3,10 @@ from PyQt5 import QtGui
 from PyQt5.QtWidgets import QDialog
 
 class MontageMenu(QDialog):
-    def __init__(self, source_ch_names, forward_ch_names, main_menu, source_bads=[], forward_bads=[]):
+    def __init__(self, source_ch_names, forward_ch_names, source_controls, source_bads=[], forward_bads=[]):
         super().__init__()
 
-        self.main_menu = main_menu
+        self.source_controls = source_controls
 
         self.title = 'Change channels'
         self.left = 20
@@ -63,5 +63,5 @@ class MontageMenu(QDialog):
         grid_layout.addWidget(okButton,1,0)
 
     def reset_ch_names(self):
-        self.main_menu._pipeline._mapping = {self.source_ch_names[k]:str(self.table.item(k,0).data(0)) for k in range(len(self.forward_ch_names))}
+        self.source_controls._pipeline._mapping = {self.source_ch_names[k]:str(self.table.item(k,0).data(0)) for k in range(len(self.forward_ch_names))}
         self.close()

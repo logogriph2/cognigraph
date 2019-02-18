@@ -345,7 +345,7 @@ class Node(object):
                         '{class_name}'.format(
                             item=item, class_name=class_name_of(self),
                             value_type=type(current_value)))
-                raise Exception(exception_message) from e
+                #raise Exception(exception_message) from e
 
         return False  # Nothing has changed
 

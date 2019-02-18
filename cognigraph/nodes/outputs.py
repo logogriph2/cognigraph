@@ -169,7 +169,6 @@ class BrainViewer(WidgetOutput):
         frequency = self.traverse_back_and_find('mne_info')['sfreq']
         buffer_sample_count = np.int(self.buffer_length * frequency)
         self._limits_buffer = RingBuffer(row_cnt=2, maxlen=buffer_sample_count)
-
         self.forward_solution = mne.read_forward_solution(
             mne_forward_model_file_path, verbose='ERROR')
         self.mesh_data = get_mesh_data_from_surfaces_dir(self.surfaces_dir)

@@ -7,7 +7,6 @@ from .screen_recorder import ScreenRecorder
 import logging
 logger = logging.getLogger(name=__name__)
 
-
 from .montage_menu import MontageMenu
 
 
@@ -58,8 +57,7 @@ class GUIWindow(QtWidgets.QMainWindow):
     def initialize(self):
         logger.debug('Initializing all nodes')
         """---------------check inverse model here----------------------"""
-        self.mapping = None
-        self.check_channels()
+        #self.check_channels()
         """-------------------------------------------------------------"""
         self._pipeline.initialize_all_nodes()
         for node_widget in self._node_widgets:
@@ -89,6 +87,7 @@ class GUIWindow(QtWidgets.QMainWindow):
         if self.run_button.text() == "Pause":
             self.run_button.setText("Start")
         else:
+            self.check_channels()
             self.run_button.setText("Pause")
 
     def _toggle_gif_button(self):
@@ -114,7 +113,10 @@ class GUIWindow(QtWidgets.QMainWindow):
                 pass
         return node_widgets
 
+
     def check_channels(self):
+
+        print("CHECK CHENNELS")
 
         import mne
         import os.path
@@ -133,7 +135,8 @@ class GUIWindow(QtWidgets.QMainWindow):
             if hasattr(self._pipeline.source,'mne_info'):
                 if self._pipeline.source.mne_info is not None:
                     print('SOURCE MNE INFO',self._pipeline.source.mne_info)
-                    return
+                    self.source_ch_names = self._pipeline.source.mne_info['ch_names']
+
             if hasattr(self._pipeline.source,'_file_path'):
                 #print('SOURCE FILE PATH',self._pipeline.source._file_path)
                 basename = os.path.basename(self._pipeline.source._file_path)
@@ -171,18 +174,21 @@ class GUIWindow(QtWidgets.QMainWindow):
 
         #source_bad_channels = source_mne_info['bads']
 
-        source_goods = mne.pick_types(source_mne_info, eeg=True, stim=False, eog=False,
-                               ecg=False, exclude='bads')
-        source_ch_names_data = [self.source_ch_names[i] for i in source_goods]
-        # Take only channels from both mne_info and the forward solution
-        ch_names_intersect = [n for n in self.forward_ch_names if
-                              n.upper() in all_upper(source_ch_names_data)]
-        missing_ch_names = [n for n in source_ch_names_data if
-                            n.upper() not in all_upper(self.forward_ch_names)]
+        if source_mne_info is not None:
+            source_goods = mne.pick_types(source_mne_info, eeg=True, stim=False, eog=False,
+                                   ecg=False, exclude='bads')
+            source_ch_names_data = [self.source_ch_names[i] for i in source_goods]
+            # Take only channels from both mne_info and the forward solution
+            ch_names_intersect = [n for n in self.forward_ch_names if
+                                  n.upper() in all_upper(source_ch_names_data)]
+            missing_ch_names = [n for n in source_ch_names_data if
+                                n.upper() not in all_upper(self.forward_ch_names)]
+            print('source_ch_names_data',len(source_ch_names_data),'self.forward_ch_names',len(self.forward_ch_names))
 
-        if len(missing_ch_names)>0:
-            self.montage_menu = MontageMenu(source_ch_names=self.source_ch_names,
-                                            forward_ch_names=self.forward_ch_names, source_bads =self.source_bads, forward_bads =self.forward_bads, main_menu=self)
-            self.montage_menu.exec()
-            self.montage_menu.exec()
+            if len(missing_ch_names)>0:
+                self.montage_menu = MontageMenu(source_ch_names=self.source_ch_names,
+                                                forward_ch_names=self.forward_ch_names, source_bads =self.source_bads, forward_bads =self.forward_bads, source_controls=self)
+                self.montage_menu.exec()
+        else:
+            print('NOT MNE INFO')
 

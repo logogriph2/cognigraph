@@ -222,6 +222,8 @@ if __name__ == '__main__':
         raise Exception("FORWARD SOLUTION IS MANDATORY!")
         logger.info('Exiting ...')
 
+    print('file_path',file_path)
+
     logger.debug('Assembling pipeline')
     pipeline = assemble_pipeline(file_path, inverse_method='mne')
     logger.debug('Finished assembling pipeline')
