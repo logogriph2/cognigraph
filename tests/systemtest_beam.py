@@ -27,7 +27,7 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger(__name__)
 pipeline = Pipeline()
 
-cur_dir = '..'
+cur_dir = '/home/dmalt/Code/python/cogni_submodules'
 test_data_path = cur_dir + '/tests/data/'
 print(test_data_path)
 sim_data_fname = 'raw_sim_nobads.fif'
@@ -38,7 +38,7 @@ fwd_fname = 'dmalt_custom_mr-fwd.fif'
 # fwd_fname = 'sample_1005-eeg-oct-6-fwd.fif'
 # fwd_fname = 'DF_2018-03-02_11-34-38-fwd.fif'
 
-surf_dir = r'C:\Users\MSI User/mne_data/MNE-sample-data/subjects/sample/'
+surf_dir = '/home/dmalt/mne_data/MNE-sample-data/subjects/sample/surf'
 
 fwd_path = op.join(test_data_path, fwd_fname)
 sim_data_path = op.join(test_data_path, sim_data_fname)
@@ -80,9 +80,9 @@ pipeline.add_output(three_dee_brain)
 # torch_output = outputs.TorchOutput()
 
 signal_viewer = outputs.SignalViewer()
-pipeline.add_output(signal_viewer, input_node=linear_filter)
-# pipeline.add_output(file_output, input_node=beamformer)
-# pipeline.add_output(torch_output, input_node=source)
+pipeline.add_output(signal_viewer, parent=linear_filter)
+# pipeline.add_output(file_output, parent=beamformer)
+# pipeline.add_output(torch_output, parent=source)
 
 window = GUIWindow(pipeline=pipeline)
 window.init_ui()

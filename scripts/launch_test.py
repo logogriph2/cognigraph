@@ -1,17 +1,18 @@
-"""Main launching script"""
+"""Launch main cognigraph gui window"""
 
 import argparse
 import sys
-import time
 import os.path as op
 import logging
-from PyQt5 import QtCore, QtWidgets
 import mne
 import numpy as np
-
+from PyQt5 import QtWidgets
+from PyQt5.QtCore import QTimer
 from cognigraph.pipeline import Pipeline
 from cognigraph.nodes import sources, processors, outputs
 from cognigraph.gui.window import GUIWindow
+from cognigraph.gui.async_pipeline_update import AsyncUpdater
+from cognigraph.gui.forward_dialog import FwdSetupDialog
 
 np.warnings.filterwarnings('ignore')  # noqa
 
@@ -20,7 +21,7 @@ logfile = None
 format = '%(asctime)s:%(name)-17s:%(levelname)s:%(message)s'
 logging.basicConfig(level=logging.INFO, filename=logfile, format=format)
 logger = logging.getLogger(__name__)
-mne.set_log_level('INFO')
+mne.set_log_level('ERROR')
 mne.set_log_file(fname=logfile, output_format=format)
 # -------------------------------------------------------------------------- #
 
@@ -35,16 +36,14 @@ args = parser.parse_args()
 
 sys.path.append('../vendor/nfb')  # For nfb submodule
 
-SURF_DIR = op.join(mne.datasets.sample.data_path(), 'subjects')
-SUBJECT = 'sample'
-DATA_DIR = '../tests/data'
+DATA_DIR = '/home/dmalt/Code/python/cogni_submodules/tests/data'
 FWD_MODEL_NAME = 'dmalt_custom_mr-fwd.fif'
 
 
-def assemble_pipeline(file_path, inverse_method='mne'):
+def assemble_pipeline(file_path=None, fwd_path=None, subject=None,
+                      subjects_dir=None, inverse_method='mne'):
     pipeline = Pipeline()
     source = sources.FileSource(file_path=file_path)
-    # source = sources.FileSource()
     source.loop_the_file = True
     source.MAX_SAMPLES_IN_CHUNK = 10000
     pipeline.source = source
@@ -58,10 +57,10 @@ def assemble_pipeline(file_path, inverse_method='mne'):
     pipeline.add_processor(linear_filter)
 
     if inverse_method == 'mne':
-        # inverse_model = processors.InverseModel(method='MNE', snr=1.0,
-        #                                         forward_model_path=fwd_path)
-        inverse_model = processors.MneGcs(snr=1.0, seed=1000,
-                                          forward_model_path=fwd_path)
+        inverse_model = processors.InverseModel(method='MNE', snr=1.0,
+                                                forward_model_path=fwd_path)
+        # inverse_model = processors.MneGcs(snr=1.0, seed=1000,
+        #                                   forward_model_path=fwd_path)
         pipeline.add_processor(inverse_model)
         envelope_extractor = processors.EnvelopeExtractor(0.99)
         pipeline.add_processor(envelope_extractor)
@@ -84,96 +83,44 @@ def assemble_pipeline(file_path, inverse_method='mne'):
 
     brain_viewer = outputs.BrainViewer(
         limits_mode=global_mode, buffer_length=6,
-        surfaces_dir=op.join(SURF_DIR, SUBJECT))
-    pipeline.add_output(brain_viewer, input_node=envelope_extractor)
+        surfaces_dir=None)
+    pipeline.add_output(brain_viewer, parent=envelope_extractor)
 
-    roi_average = processors.AtlasViewer(SUBJECT, SURF_DIR)
-    roi_average.input_node = inverse_model
-    pipeline.add_processor(roi_average)
+    # roi_average = processors.AtlasViewer(SUBJECT, subjects_dir)
+    # roi_average.parent = inverse_model
+    # pipeline.add_processor(roi_average)
 
-    aec = processors.AmplitudeEnvelopeCorrelations(
-        method=None,
-        seed=1000
-        # method='temporal_orthogonalization',
-        # method='geometric_correction',
-        # seed=0
-    )
-    pipeline.add_processor(aec)
-    aec.input_node = inverse_model
-    # coh = processors.Coherence(
-    #     method='coh', seed=0)
-    aec_env = processors.EnvelopeExtractor(0.995)
-    pipeline.add_processor(aec_env)
+    # aec = processors.AmplitudeEnvelopeCorrelations(
+    #     method=None,
+    #     seed=1000
+    #     # method='temporal_orthogonalization',
+    #     # method='geometric_correction',
+    #     # seed=0
+    # )
+    # pipeline.add_processor(aec)
+    # aec.parent = inverse_model
+    # # coh = processors.Coherence(
+    # #     method='coh', seed=0)
+    # aec_env = processors.EnvelopeExtractor(0.995)
+    # pipeline.add_processor(aec_env)
 
-    seed_viewer = outputs.BrainViewer(
-        limits_mode=global_mode, buffer_length=6,
-        surfaces_dir=op.join(SURF_DIR, SUBJECT))
+    # seed_viewer = outputs.BrainViewer(
+    #     limits_mode=global_mode, buffer_length=6,
+    #     surfaces_dir=op.join(subjects_dir, SUBJECT))
 
-    #pipeline.add_output(seed_viewer, input_node=aec_env)
+    # pipeline.add_output(seed_viewer, parent=aec_env)
 
     # pipeline.add_output(outputs.LSLStreamOutput())
     # signal_viewer = outputs.SignalViewer()
     # signal_viewer_src = outputs.SignalViewer()
-    # pipeline.add_output(signal_viewer, input_node=linear_filter)
-    # pipeline.add_output(signal_viewer_src, input_node=roi_average)
-    #con_viewer = outputs.ConnectivityViewer(
-    #     surfaces_dir=op.join(SURF_DIR, SUBJECT))
-    #pipeline.add_output(con_viewer, input_node=aec)
+    # pipeline.add_output(signal_viewer, parent=linear_filter)
+    # pipeline.add_output(signal_viewer_src, parent=roi_average)
+    # con_viewer = outputs.ConnectivityViewer(
+    #     surfaces_dir=op.join(subjects_dir, SUBJECT))
+    # pipeline.add_output(con_viewer, parent=aec)
     # --------------------------------------------------------------------- #
     return pipeline
 
-
-class Communicate(QtCore.QObject):
-    """Pyqt signals sender"""
-    sync_signal = QtCore.pyqtSignal()
-
-
-class AsyncUpdater(QtCore.QThread):
-    _stop_flag = False
-
-    def __init__(self):
-        super(AsyncUpdater, self).__init__()
-        self.sender = Communicate()
-        self.sender.sync_signal.connect(
-            self.process_events_on_main_thread,
-            type=QtCore.Qt.BlockingQueuedConnection)
-        self.is_paused = True
-
-    def process_events_on_main_thread(self):
-        app.processEvents()
-
-    def run(self):
-        self._stop_flag = False
-        logger.info('Start pipeline')
-
-        is_first_iter = True
-        while True:
-            start = time.time()
-            pipeline.update_all_nodes()
-            end = time.time()
-            if is_first_iter:
-                # without this hack widgets are not updated unless
-                # you click on them
-                time.sleep(0.05)
-                is_first_iter = False
-
-            self.sender.sync_signal.emit()
-            if self._stop_flag is True:
-                QtWidgets.QApplication.processEvents()
-                break
-
-    def stop(self):
-        logger.info('Stop pipeline')
-        self._stop_flag = True
-
-    def toggle(self):
-        if self.is_paused:
-            self.is_paused = False
-            self.start()
-        else:
-            self.is_paused = True
-            self.stop()
-            self.wait(1000)
 
 def on_main_window_close():
     thread.stop()
@@ -185,11 +132,18 @@ def on_main_window_close():
         window.deleteLater()
     except RuntimeError:
         logger.info('Window has already been deleted')
-    # del pipeline
-    # thread.deleteLater()
+
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
+
+    logger.debug('Assembling pipeline')
+    pipeline = assemble_pipeline(None, None, inverse_method='beamformer')
+    logger.debug('Finished assembling pipeline')
+    # Create window
+    window = GUIWindow(pipeline=pipeline)
+    window.init_ui()
+    window.show()
 
     if not args.data:
         try:
@@ -199,7 +153,7 @@ if __name__ == '__main__':
                        "MNE-python (*.fif);;"
                        "European Data Format (*.edf)")
             file_path = file_tuple[0]
-        except:
+        except Exception:
             logger.error("DATA FILE IS MANDATORY!")
     else:
         file_path = args.data.name
@@ -208,13 +162,11 @@ if __name__ == '__main__':
         raise Exception("DATA PATH IS MANDATORY!")
 
     if not args.forward:
-        try:
-            fwd_tuple = QtWidgets.QFileDialog.getOpenFileName(
-                caption="Select forward model",
-                filter= "MNE-python forward (*-fwd.fif)")
-            fwd_path = fwd_tuple[0]
-        except:
-            logger.error("FORWARD SOLUTION IS MANDATORY!")
+        dialog = FwdSetupDialog()
+        dialog.exec()
+        fwd_path = dialog.fwd_path
+        subject = dialog.subject
+        subjects_dir = dialog.subjects_dir
     else:
         fwd_path = args.forward.name
 
@@ -222,22 +174,15 @@ if __name__ == '__main__':
         raise Exception("FORWARD SOLUTION IS MANDATORY!")
         logger.info('Exiting ...')
 
-    print('file_path',file_path)
+    pipeline.all_nodes[0].file_path = file_path
+    pipeline.all_nodes[3]._user_provided_forward_model_file_path = fwd_path
+    pipeline.all_nodes[5].surfaces_dir = op.join(subjects_dir, subject)
 
-    logger.debug('Assembling pipeline')
-    pipeline = assemble_pipeline(file_path, inverse_method='mne')
-    logger.debug('Finished assembling pipeline')
-    # Create window
-    window = GUIWindow(pipeline=pipeline)
-    window.init_ui()
-    window.initialize()  # initializes all pipeline nodes
-    window.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
+    QTimer.singleShot(0, window.initialize)  # initializes all pipeline nodes
 
-    thread = AsyncUpdater()
-    window.run_button.clicked.connect(thread.toggle)
-    # window.destroyed.connect(on_main_window_close)
+    thread = AsyncUpdater(app, pipeline)
+    window.run_toggle_action.triggered.connect(thread.toggle)
 
     # Show window and exit on close
-    window.show()
     app.aboutToQuit.connect(on_main_window_close)
     sys.exit(app.exec_())

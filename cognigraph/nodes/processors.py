@@ -15,6 +15,7 @@ from sklearn.preprocessing import normalize
 from mne.preprocessing import find_outliers
 from mne.minimum_norm import apply_inverse_raw  # , make_inverse_operator
 from mne.minimum_norm import make_inverse_operator as mne_make_inverse_operator
+from mne.minimum_norm import prepare_inverse_operator
 from mne.beamformer import apply_lcmv_raw
 from ..helpers.make_lcmv import make_lcmv
 
@@ -36,14 +37,13 @@ from ..helpers.aux_tools import nostdout
 from .. import TIME_AXIS
 from vendor.nfb.pynfb.signal_processing import filters
 
-
 class Preprocessing(ProcessorNode):
     CHANGES_IN_THESE_REQUIRE_RESET = ('collect_for_x_seconds', )
     UPSTREAM_CHANGES_IN_THESE_REQUIRE_REINITIALIZATION = ('mne_info', )
     SAVERS_FOR_UPSTREAM_MUTABLE_OBJECTS = {'mne_info': channel_labels_saver}
 
-    def __init__(self, collect_for_x_seconds: int=60):
-        super().__init__()
+    def __init__(self, collect_for_x_seconds=60, dsamp_freq=None):
+        ProcessorNode.__init__(self)
         self.collect_for_x_seconds = collect_for_x_seconds  # type: int
 
         self._samples_collected = None  # type: int
@@ -53,11 +53,11 @@ class Preprocessing(ProcessorNode):
         self._mean_sums_of_squares = None  # type: np.ndarray
         self._bad_channel_indices = None  # type: List[int]
         self._interpolation_matrix = None  # type: np.ndarray
+        self._dsamp_freq = dsamp_freq
 
         self._reset_statistics()
 
     def _initialize(self):
-        self._reset_statistics()
         self.mne_info = self.traverse_back_and_find('mne_info')
         frequency = self.mne_info['sfreq']
         self._samples_to_be_collected = int(math.ceil(
@@ -68,8 +68,8 @@ class Preprocessing(ProcessorNode):
         enough_collected = self._samples_collected >=\
                 self._samples_to_be_collected
         if not enough_collected:
-            if self.input_node.output is not None and\
-                    self.input_node.output.shape[TIME_AXIS] > 0:
+            if self.parent.output is not None and\
+                    self.parent.output.shape[TIME_AXIS] > 0:
                 self._update_statistics()
 
         elif not self._enough_collected:  # We just got enough samples
@@ -85,11 +85,16 @@ class Preprocessing(ProcessorNode):
 
                 # TODO: handle emergent bad channels on the go
                 pass
+        if self._dsamp_freq and self._dsamp_freq < self.mne_info['sfreq']:
+            raw = mne.io.RawArray(self.parent.output, self.mne_info)
+            raw.resample(self._dsamp_freq)
+            self.output = raw.get_data()
+            self.mne_info = raw.mne_info
 
-        self.output = self.input_node.output
+        else:
+            self.output = self.parent.output
 
     def _reset(self) -> bool:
-        print('RESET')
         self._reset_statistics()
         self._input_history_is_no_longer_valid = True
         return self._input_history_is_no_longer_valid
@@ -102,7 +107,7 @@ class Preprocessing(ProcessorNode):
         self._bad_channel_indices = []
 
     def _update_statistics(self):
-        input_array = self.input_node.output.astype(np.dtype('float64'))
+        input_array = self.parent.output.astype(np.dtype('float64'))
         # Using float64 is necessary because otherwise rounding error
         # in recursive formula accumulate
         n = self._samples_collected
@@ -135,8 +140,9 @@ class InverseModel(ProcessorNode):
                                       'snr', 'method')
     SAVERS_FOR_UPSTREAM_MUTABLE_OBJECTS = {'mne_info': channel_labels_saver}
 
-    def __init__(self, forward_model_path=None, snr=1.0, method='MNE'):
-        super().__init__()
+    def __init__(self, forward_model_path=None, snr=1.0, method='MNE',
+                 depth=None, loose=1, fixed=False):
+        ProcessorNode.__init__(self)
 
         self.snr = snr
         self._user_provided_forward_model_file_path = forward_model_path
@@ -144,8 +150,11 @@ class InverseModel(ProcessorNode):
         self.mne_info = None
         self.fwd = None
 
-        self._inverse_model_matrix = None
+        # self._inverse_model_matrix = None
         self.method = method
+        self.loose = loose
+        self.depth = depth
+        self.fixed = fixed
 
     def _initialize(self):
         mne_info = self.traverse_back_and_find('mne_info')
@@ -159,10 +168,21 @@ class InverseModel(ProcessorNode):
             self.mne_forward_model_file_path, mne_info)
         mne_info['bads'] = list(set(mne_info['bads'] + missing_ch_names))
 
-        inverse_operator = make_inverse_operator(self.fwd, mne_info)
-        self._inverse_model_matrix = matrix_from_inverse_operator(
-            inverse_operator=inverse_operator, mne_info=mne_info,
-            snr=self.snr, method=self.method)
+
+        self.inverse_operator = make_inverse_operator(self.fwd,
+                                                      mne_info,
+                                                      depth=self.depth,
+                                                      loose=self.loose,
+                                                      fixed=self.fixed)
+
+
+        self.lambda2 = 1.0 / self.snr ** 2
+        self.inverse_operator = prepare_inverse_operator(
+            self.inverse_operator, nave=100,
+            lambda2=self.lambda2, method=self.method)
+        # self._inverse_model_matrix = matrix_from_inverse_operator(
+        #     inverse_operator=self.inverse_operator, mne_info=mne_info,
+        #     snr=self.snr, method=self.method)
 
         frequency = mne_info['sfreq']
         # channel_count = self._inverse_model_matrix.shape[0]
@@ -175,17 +195,31 @@ class InverseModel(ProcessorNode):
         mne_info = self.traverse_back_and_find('mne_info')
         bads = mne_info['bads']
         if bads != self._bad_channels:
-            inverse_operator = make_inverse_operator(self.fwd, mne_info)
-            self._inverse_model_matrix = matrix_from_inverse_operator(
-                inverse_operator=inverse_operator, mne_info=mne_info,
-                snr=self.snr, method=self.method)
+            self.logger.info('Found new bad channels {};'.format(bads) +
+                             'updating inverse operator')
+            # self.inverse_operator = make_inverse_operator(self.fwd, mne_info)
+            self.inverse_operator = make_inverse_operator(self.fwd,
+                                                          mne_info,
+                                                          depth=self.depth,
+                                                          loose=self.loose,
+                                                          fixed=self.fixed)
+            self.inverse_operator = prepare_inverse_operator(
+                self.inverse_operator, nave=100,
+                lambda2=self.lambda2, method=self.method)
+                # self._inverse_model_matrix = matrix_from_inverse_operator(
+            #     inverse_operator=self.inverse_operator, mne_info=mne_info,
+            #     snr=self.snr, method=self.method)
             self._bad_channels = bads
 
-        input_array = self.input_node.output
+        input_array = self.parent.output
         raw_array = mne.io.RawArray(input_array, mne_info, verbose='ERROR')
         raw_array.pick_types(eeg=True, meg=False, stim=False, exclude='bads')
-        data = raw_array.get_data()
-        self.output = self._apply_inverse_model_matrix(data)
+        # data = raw_array.get_data()
+        # self.output = self._apply_inverse_model_matrix(data)
+        stc = apply_inverse_raw(raw_array, self.inverse_operator,
+                                lambda2=self.lambda2, method=self.method,
+                                prepared=True)
+        self.output = stc.data
 
     def _on_input_history_invalidation(self):
         # The methods implemented in this node do not rely on past inputs
@@ -232,7 +266,7 @@ class LinearFilter(ProcessorNode):
                                            lambda info: (info['nchan'], )}
 
     def __init__(self, lower_cutoff, upper_cutoff):
-        super().__init__()
+        ProcessorNode.__init__(self)
         self.lower_cutoff = lower_cutoff
         self.upper_cutoff = upper_cutoff
         self._linear_filter = None  # type: filters.ButterFilter
@@ -253,7 +287,7 @@ class LinearFilter(ProcessorNode):
             self._linear_filter = None
 
     def _update(self):
-        input_data = self.input_node.output
+        input_data = self.parent.output
         if self._linear_filter is not None:
             self.output = self._linear_filter.apply(input_data)
         else:
@@ -294,13 +328,12 @@ class LinearFilter(ProcessorNode):
 
 class EnvelopeExtractor(ProcessorNode):
     def __init__(self, factor=0.9):
-        super().__init__()
+        ProcessorNode.__init__(self)
         self.method = 'Exponential smoothing'
         self.factor = factor
         self._envelope_extractor = None  # type: ExponentialMatrixSmoother
 
     def _initialize(self):
-        print('ENVELOP INITIALIZER', '\nNCHAN',self.traverse_back_and_find('mne_info')['nchan'])
         channel_count = self.traverse_back_and_find('mne_info')['nchan']
         self._envelope_extractor = ExponentialMatrixSmoother(
             factor=self.factor, column_count=channel_count)
@@ -308,7 +341,7 @@ class EnvelopeExtractor(ProcessorNode):
             self._envelope_extractor.apply)
 
     def _update(self):
-        input_data = self.input_node.output
+        input_data = self.parent.output
         self.output = self._envelope_extractor.apply(np.abs(input_data))
 
     def _check_value(self, key, value):
@@ -342,19 +375,19 @@ class Beamformer(ProcessorNode):
 
     SUPPORTED_OUTPUT_TYPES = ('power', 'activation')
     UPSTREAM_CHANGES_IN_THESE_REQUIRE_REINITIALIZATION = ('mne_info',)
-    CHANGES_IN_THESE_REQUIRE_RESET = ('snr', 'output_type', 'is_adaptive',
+    CHANGES_IN_THESE_REQUIRE_RESET = ('reg', 'output_type', 'is_adaptive',
                                       'fixed_orientation',
                                       'mne_forward_model_file_path')
 
     SAVERS_FOR_UPSTREAM_MUTABLE_OBJECTS = {'mne_info': channel_labels_saver}
 
-    def __init__(self, snr: float=1.0, output_type: str='power',
-                 is_adaptive: bool=False, fixed_orientation: bool=True,
-                 forward_model_path: str=None,
-                 forgetting_factor_per_second: float=0.99):
-        super().__init__()
+    def __init__(self, output_type='power',
+                 is_adaptive=False, fixed_orientation=True,
+                 forward_model_path=None,
+                 forgetting_factor_per_second=0.99,
+                 reg=0.05):
+        ProcessorNode.__init__(self)
 
-        self.snr = snr  # type: float
         self._user_provided_forward_model_file_path = forward_model_path
         self._default_forward_model_file_path = None  # type: str
         self.mne_info = None  # type: mne.Info
@@ -370,6 +403,7 @@ class Beamformer(ProcessorNode):
         self._Rxx = None  # type: np.ndarray
         self.forgetting_factor_per_second = forgetting_factor_per_second
         self._forgetting_factor_per_sample = None  # type: float
+        self.reg = reg
 
     def _initialize(self):
         mne_info = self.traverse_back_and_find('mne_info')
@@ -378,51 +412,60 @@ class Beamformer(ProcessorNode):
             self._default_forward_model_file_path = get_default_forward_file(
                     mne_info)
 
+        self.sender.montage_signal.connect(self._root.reciever.on_montageError)
+        is_ok = True
+
         try:
             fwd, missing_ch_names = get_clean_forward(
                 self.mne_forward_model_file_path, mne_info)
-        except ValueError:
-            raise Exception('BAD FORWARD + DATA COMBINATION!')
+        except ValueError as ve:
+            if len(ve.args)==3:
+                self.sender.montage_signal.emit(ve.args)
+                is_ok = False
+            else:
+                raise Exception('BAD FORWARD + DATA COMBINATION!')
+        if is_ok:
+            mne_info['bads'] = list(set(mne_info['bads'] + missing_ch_names))
+            self._gain_matrix = fwd['sol']['data']
+            G = self._gain_matrix
+            if self.is_adaptive is False:
+                Rxx = G.dot(G.T)
+            elif self.is_adaptive is True:
+                Rxx = np.zeros([G.shape[0], G.shape[0]])  # G.dot(G.T)
 
-        mne_info['bads'] = list(set(mne_info['bads'] + missing_ch_names))
-        self._gain_matrix = fwd['sol']['data']
-        G = self._gain_matrix
-        if self.is_adaptive is False:
-            Rxx = G.dot(G.T)
-        elif self.is_adaptive is True:
-            Rxx = np.zeros([G.shape[0], G.shape[0]])  # G.dot(G.T)
+            goods = mne.pick_types(mne_info, eeg=True, meg=False, exclude='bads')
+            ch_names = [mne_info['ch_names'][i] for i in goods]
 
-        goods = mne.pick_types(mne_info, eeg=True, meg=False, exclude='bads')
-        ch_names = [mne_info['ch_names'][i] for i in goods]
+            self._Rxx = mne.Covariance(Rxx, ch_names, mne_info['bads'],
+                                       mne_info['projs'], nfree=1)
 
-        self._Rxx = mne.Covariance(Rxx, ch_names, mne_info['bads'],
-                                   mne_info['projs'], nfree=1)
+            self.noise_cov = mne.Covariance(G.dot(G.T), ch_names, mne_info['bads'],
+                                            mne_info['projs'], nfree=1)
+            self._mne_info = mne_info
 
-        self._mne_info = mne_info
+            frequency = mne_info['sfreq']
+            self._forgetting_factor_per_sample = np.power(
+                    self.forgetting_factor_per_second, 1 / frequency)
 
-        frequency = mne_info['sfreq']
-        self._forgetting_factor_per_sample = np.power(
-                self.forgetting_factor_per_second, 1 / frequency)
+            n_vert = fwd['nsource']
+            channel_labels = ['vertex #{}'.format(i + 1) for i in range(n_vert)]
+            self.mne_info = mne.create_info(channel_labels, frequency)
+            self._initialized_as_adaptive = self.is_adaptive
+            self._initialized_as_fixed = self.fixed_orientation
 
-        n_vert = fwd['nsource']
-        channel_labels = ['vertex #{}'.format(i + 1) for i in range(n_vert)]
-        self.mne_info = mne.create_info(channel_labels, frequency)
-        self._initialized_as_adaptive = self.is_adaptive
-        self._initialized_as_fixed = self.fixed_orientation
-
-        self.fwd_surf = mne.convert_forward_solution(
-                    fwd, surf_ori=True, force_fixed=False)
-        if not self.is_adaptive:
-            self._filters = make_lcmv(
-                    info=self._mne_info, forward=self.fwd_surf,
-                    data_cov=self._Rxx, reg=0.05, pick_ori='max-power',
-                    weight_norm='unit-noise-gain', reduce_rank=False)
-        else:
-            self._filters = None
+            self.fwd_surf = mne.convert_forward_solution(
+                        fwd, surf_ori=True, force_fixed=False)
+            if not self.is_adaptive:
+                self._filters = make_lcmv(
+                        info=self._mne_info, forward=self.fwd_surf,
+                        data_cov=self._Rxx, reg=self.reg, pick_ori='max-power',
+                        weight_norm='unit-noise-gain', reduce_rank=False)
+            else:
+                self._filters = None
 
     def _update(self):
         t1 = time.time()
-        input_array = self.input_node.output
+        input_array = self.parent.output
         raw_array = mne.io.RawArray(
             input_array, self._mne_info, verbose='ERROR')
 
@@ -437,7 +480,8 @@ class Beamformer(ProcessorNode):
             t1 = time.time()
             self._filters = make_lcmv(info=self._mne_info,
                                       forward=self.fwd_surf,
-                                      data_cov=self._Rxx, reg=0.5,
+                                      data_cov=self._Rxx, reg=self.reg,
+                                      noise_cov=self.noise_cov,
                                       pick_ori='max-power',
                                       weight_norm='unit-noise-gain',
                                       reduce_rank=False)
@@ -507,10 +551,10 @@ class Beamformer(ProcessorNode):
                     ' Use one of: {}'.format(
                         value, self.SUPPORTED_OUTPUT_TYPES))
 
-        if key == 'snr':
+        if key == 'reg':
             if value <= 0:
-                raise ValueError(
-                    'snr (signal-to-noise ratio) must be a positive number')
+                raise ValueError('reg (covariance regularization coefficient)'
+                                 ' must be a positive number')
 
         if key == 'is_adaptive':
             if not isinstance(value, bool):
@@ -605,7 +649,7 @@ class MCE(ProcessorNode):
     CHANGES_IN_THESE_REQUIRE_RESET = ('mne_forward_model_file_path', 'snr')
 
     def __init__(self, snr=1.0, forward_model_path=None, n_comp=40):
-        super().__init__()
+        ProcessorNode.__init__(self)
         self.snr = snr
         self.mne_forward_model_file_path = forward_model_path
         self.n_comp = n_comp
@@ -663,7 +707,7 @@ class MCE(ProcessorNode):
         self.mne_info = mne.create_info(channel_labels, mne_info['sfreq'])
 
     def _update(self):
-        input_array = self.input_node.output
+        input_array = self.parent.output
         # last_slice = last_sample(input_array)
         last_slice = np.mean(input_array, axis=1)
         n_src = self.mne_inv['nsource']
@@ -722,7 +766,7 @@ class MCE(ProcessorNode):
 class ICARejection(ProcessorNode):
 
     def __init__(self, collect_for_x_seconds: int=60):
-        super().__init__()
+        ProcessorNode.__init__(self)
         self.collect_for_x_seconds = collect_for_x_seconds  # type: int
 
         self._samples_collected = None  # type: int
@@ -772,13 +816,13 @@ class ICARejection(ProcessorNode):
 
     def _update(self):
         # Have we collected enough samples without the new input?
-        self.output = self.input_node.output
+        self.output = self.parent.output
 
         enough_collected = self._samples_collected >=\
             self._samples_to_be_collected
         if not enough_collected:
-            if self.input_node.output is not None and\
-                    self.input_node.output.shape[TIME_AXIS] > 0:
+            if self.parent.output is not None and\
+                    self.parent.output.shape[TIME_AXIS] > 0:
                 self._update_statistics()
 
         elif not self._enough_collected:  # We just got enough samples
@@ -794,10 +838,10 @@ class ICARejection(ProcessorNode):
         else:
             self.output[self._good_ch_inds, :] = np.dot(
                     self._ica_rejector,
-                    self.input_node.output[self._good_ch_inds, :])
+                    self.parent.output[self._good_ch_inds, :])
 
     def _update_statistics(self):
-        input_array = self.input_node.output.astype(np.dtype('float64'))
+        input_array = self.parent.output.astype(np.dtype('float64'))
         n = self._samples_collected
         m = input_array.shape[TIME_AXIS]  # number of new samples
         self._samples_collected += m
@@ -816,7 +860,7 @@ class AtlasViewer(ProcessorNode):
     UPSTREAM_CHANGES_IN_THESE_REQUIRE_REINITIALIZATION = ()
 
     def __init__(self, subject, subjects_dir, parc='aparc'):
-        super().__init__()
+        ProcessorNode.__init__(self)
         self.parc = parc
         self.subjects_dir = subjects_dir
         self.subject = subject
@@ -940,7 +984,7 @@ class AtlasViewer(ProcessorNode):
             ...
 
     def _update(self):
-        data = self.input_node.output
+        data = self.parent.output
 
         n_times = data.shape[1]
         n_active_labels = len(self.active_labels)
@@ -974,7 +1018,7 @@ class AmplitudeEnvelopeCorrelations(ProcessorNode):
     UPSTREAM_CHANGES_IN_THESE_REQUIRE_REINITIALIZATION = ('mne_info', )
 
     def __init__(self, method=None, factor=0.9, seed=None):
-        super().__init__()
+        ProcessorNode.__init__(self)
         self.method = method
         self._envelope_extractor = None
         self.factor = factor
@@ -993,7 +1037,7 @@ class AmplitudeEnvelopeCorrelations(ProcessorNode):
             self._envelope_extractor.apply)
 
     def _update(self):
-        input_data = self.input_node.output
+        input_data = self.parent.output
         n_times = input_data.shape[1]
         ddof = 1
 
@@ -1069,7 +1113,7 @@ class Coherence(ProcessorNode):
     UPSTREAM_CHANGES_IN_THESE_REQUIRE_REINITIALIZATION = ()
 
     def __init__(self, method='imcoh', seed=None):
-        super().__init__()
+        ProcessorNode.__init__(self)
         self.method = method
         self.seed = seed
 
@@ -1077,7 +1121,7 @@ class Coherence(ProcessorNode):
         pass
 
     def _update(self):
-        input_data = self.input_node.output
+        input_data = self.parent.output
         hilbert = sc.signal.hilbert(input_data, axis=1)
         if self.seed is None:
             Cp = hilbert.dot(hilbert.conj().T)

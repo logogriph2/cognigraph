@@ -16,6 +16,7 @@ standard_1005_forward_file_path = os.path.join(
     sample_dir, 'sample_1005-eeg-oct-6-fwd.fif')
 
 
+
 def _pick_columns_from_matrix(matrix: np.ndarray, output_column_labels: list,
                               input_column_labels: list) -> np.ndarray:
     """
@@ -142,31 +143,36 @@ def get_clean_forward(forward_model_path: str, mne_info: mne.Info):
     missing_ch_names = [n for n in ch_names_data if
                         n.upper() not in all_upper(ch_names_fwd)]
 
+    missing_fwd_ch_names = [n for n in ch_names_fwd if
+                        n.upper() not in all_upper(ch_names_data)]
+
+    if len(missing_fwd_ch_names) > 0:
+        raise ValueError(mne_info['ch_names'],ch_names_fwd,mne_info['bads'])
+
+
     fwd = mne.pick_channels_forward(forward, include=ch_names_intersect)
     return fwd, missing_ch_names
 
 
-def make_inverse_operator(fwd, mne_info, sigma2=1):
-    # sigma2 is what will be used to scale the identity covariance matrix.
-    # This will not affect MNE solution though.
+def make_inverse_operator(fwd, mne_info, depth=None,
+                          loose=1, fixed=False):
+    """
+    Make noise covariance matrix and create inverse operator using only
+    good channels
+
+    """
     # The inverse operator will use channels common to
     # forward_model_file_path and mne_info.
 
-    #print('inverse_model.py, 155, mne_info', print(mne_info))
-    print('CALL inverse_model 156')
-    print(mne_info["ch_names"])
-
     picks = mne.pick_types(mne_info, eeg=True, meg=False, exclude='bads')
-    #print('inverse_model.py, 159, picks', print(picks))
     info_goods = mne.pick_info(mne_info, sel=picks)
 
     N_SEN = fwd['nchan']
     ch_names = info_goods['ch_names']
-    #print('inverse_model ch_names: ', ch_names);
     cov_data = np.identity(N_SEN)
     cov = mne.Covariance(cov_data, ch_names, mne_info['bads'],
                          mne_info['projs'], nfree=1)
     inv = mne.minimum_norm.make_inverse_operator(info_goods, fwd, cov,
-                                                 depth=None, loose=0,
-                                                 fixed=True, verbose='ERROR')
+                                                 depth=None, loose=0.8,
+                                                 fixed=False, verbose='ERROR')
     return inv

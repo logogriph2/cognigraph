@@ -38,15 +38,19 @@ from vispy import scene
 import torch
 # import logging
 
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-from matplotlib.figure import Figure
+# from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+# from matplotlib.figure import Figure
 
-
+# -------- gif recorder -------- #
+from vispy.gloo.util import _screenshot
+from PIL import Image as im
+# ------------------------------ #
 
 
 class Communicate(QObject):
     init_widget_sig = pyqtSignal()
     draw_sig = pyqtSignal('PyQt_PyObject')
+    screenshot_sig = pyqtSignal()
 
 
 class WidgetOutput(OutputNode):
@@ -128,7 +132,7 @@ class LSLStreamOutput(OutputNode):
             channel_types=channel_types)
 
     def _update(self):
-        chunk = self.input_node.output
+        chunk = self.parent.output
         lsl_chunk = convert_numpy_array_to_lsl_chunk(chunk)
         self._outlet.push_chunk(lsl_chunk)
 
@@ -162,6 +166,17 @@ class BrainViewer(WidgetOutput):
         self.widget = None
         self.output = None
 
+        # -------- gif recorder -------- #
+        self.is_recording = False
+        self.sector = None
+
+        self._start_time = None
+        self._display_time = None  # Time in ms between switching images
+
+        self._images = []
+        self.signal_sender.screenshot_sig.connect(self._append_screenshot)
+        # ------------------------------ #
+
     def _initialize(self):
         mne_forward_model_file_path = self.traverse_back_and_find(
             'mne_forward_model_file_path')
@@ -169,6 +184,7 @@ class BrainViewer(WidgetOutput):
         frequency = self.traverse_back_and_find('mne_info')['sfreq']
         buffer_sample_count = np.int(self.buffer_length * frequency)
         self._limits_buffer = RingBuffer(row_cnt=2, maxlen=buffer_sample_count)
+
         self.forward_solution = mne.read_forward_solution(
             mne_forward_model_file_path, verbose='ERROR')
         self.mesh_data = get_mesh_data_from_surfaces_dir(self.surfaces_dir)
@@ -195,13 +211,16 @@ class BrainViewer(WidgetOutput):
         self._threshold_pct = value
 
     def _update(self):
-        sources = self.input_node.output
+        sources = self.parent.output
         self.output = sources
         if self.take_abs:
             sources = np.abs(sources)
         self._update_colormap_limits(sources)
         normalized_sources = self._normalize_sources(last_sample(sources))
         self.signal_sender.draw_sig.emit(normalized_sources)
+
+        if self.is_recording:
+            self.signal_sender.screenshot_sig.emit()
 
     def _update_colormap_limits(self, sources):
         self._limits_buffer.extend(np.array([
@@ -291,12 +310,41 @@ class BrainViewer(WidgetOutput):
         except FileNotFoundError:
             self.logger.info('Calculating smoothing matrix.' +
                              ' This might take a while the first time.')
-            sources_idx, vertexes, faces = get_mesh_data_from_forward_solution(
+            sources_idx, *_ = get_mesh_data_from_forward_solution(
                 self.forward_solution)
             adj_mat = mesh_edges(self.mesh_data._faces)
             smoothing_mat = smoothing_matrix(sources_idx, adj_mat)
             sparse.save_npz(smoothing_matrix_file_path, smoothing_mat)
             return smoothing_mat
+
+    def _start_gif(self):
+        self._images = []
+        self._start_time = time.time()
+
+        self.is_recording = True
+
+    def _stop_gif(self):
+        self.is_recording = False
+        # self._timer.stop()
+
+        duration = time.time() - self._start_time
+        self._display_time = (duration * 1000) / len(self._images)
+
+    def _save_gif(self, path):
+        self._images[0].save(
+            path,
+            save_all=True,
+            append_images=self._images[1:],
+            duration=self._display_time,
+            loop=0)
+
+    def _append_screenshot(self):
+        if self.sector is None:
+            # self._images.append(ImageGrab.grab())
+            self._images.append(im.fromarray(_screenshot()))
+        else:
+            # self._images.append(ImageGrab.grab(bbox=self.sector))
+            self._images.append(im.fromarray(_screenshot()))
 
 
 class SignalViewer(WidgetOutput):
@@ -325,7 +373,7 @@ class SignalViewer(WidgetOutput):
 
 
     def _update(self):
-        chunk = self.input_node.output
+        chunk = self.parent.output
         self.signal_sender.draw_sig.emit(chunk)
 
     def on_draw(self, chunk):
@@ -348,13 +396,8 @@ class SignalViewer(WidgetOutput):
         # Nothing to be set
         pass
 
+
 class FileOutput(OutputNode):
-
-    def _on_input_history_invalidation(self):
-        pass
-
-    def _check_value(self, key, value):
-        pass  # TODO: check that value as a string usable as a stream name
 
     CHANGES_IN_THESE_REQUIRE_RESET = ('stream_name', )
 
@@ -362,6 +405,12 @@ class FileOutput(OutputNode):
     SAVERS_FOR_UPSTREAM_MUTABLE_OBJECTS = {'mne_info':
                                            lambda info: (info['sfreq'], ) +
                                            channel_labels_saver(info)}
+
+    def _on_input_history_invalidation(self):
+        pass
+
+    def _check_value(self, key, value):
+        pass  # TODO: check that value as a string usable as a stream name
 
     def _reset(self):
         self._should_reinitialize = True
@@ -385,7 +434,7 @@ class FileOutput(OutputNode):
             self.out_file.root, 'data', atom, (col_size, 0))
 
     def _update(self):
-        chunk = self.input_node.output
+        chunk = self.parent.output
         self.output_array.append(chunk)
 
 
@@ -407,7 +456,7 @@ class TorchOutput(OutputNode):
         pass
 
     def _update(self):
-        self.output = torch.from_numpy(self.input_node.output)
+        self.output = torch.from_numpy(self.parent.output)
 
 
 class ConnectivityViewer(WidgetOutput):
@@ -432,7 +481,7 @@ class ConnectivityViewer(WidgetOutput):
         self.signal_sender.init_widget_sig.emit()
 
     def _update(self):
-        input_data = np.abs(self.input_node.output)  # connectivity matrix
+        input_data = np.abs(self.parent.output)  # connectivity matrix
         # 1. Get n_lines stronges connections indices (i, j)
         # get only off-diagonal elements
         l_triang = np.tril(input_data, k=-1)
