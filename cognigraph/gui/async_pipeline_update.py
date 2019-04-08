@@ -6,7 +6,11 @@ import time
 
 class Communicate(QObject):
     """Pyqt signals sender"""
+<<<<<<< HEAD
     sync_signal = pyqtSignal([])
+=======
+    sync_signal = pyqtSignal()
+>>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
 
 
 class AsyncUpdater(QThread):

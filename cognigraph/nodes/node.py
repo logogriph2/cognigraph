@@ -5,9 +5,10 @@ from contextlib import contextmanager
 import numpy as np
 from mne.io.pick import channel_type
 
-from ..helpers.misc import class_name_of
+from ..utils.misc import class_name_of
 import logging
 
+<<<<<<< HEAD
 from PyQt5.QtCore import pyqtSignal, QObject, pyqtSlot
 import mne
 
@@ -31,6 +32,8 @@ class Reciever(QObject):
 
     def changeMontage(self, montage_mapping):
         self.source._remap(montage_mapping)
+=======
+>>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
 
 class Node(object):
     """
@@ -186,11 +189,19 @@ class Node(object):
     def parent(self, new_parent):
         if self._parent is new_parent:  # covers the case when both are None
             return
+<<<<<<< HEAD
 
         # Tell the previous parent about disconnection
         if self._parent is not None:
             self._parent._children.remove(self)
 
+=======
+
+        # Tell the previous parent about disconnection
+        if self._parent is not None:
+            self._parent._children.remove(self)
+
+>>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
         self._parent = new_parent
 
         # Tell the new input node about the connection
@@ -311,9 +322,13 @@ class SourceNode(Node):
 
     def __init__(self):
         Node.__init__(self)
+<<<<<<< HEAD
         self.mne_info = None  # type: mne.Info
         self.reciever = Reciever(self)
 
+=======
+        self.mne_info = None
+>>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
 
     def initialize(self):
         self.mne_info = None
@@ -361,6 +376,7 @@ class SourceNode(Node):
     def _on_input_history_invalidation(self):
         raise NotImplementedError
         # super()._on_input_history_invalidation()
+<<<<<<< HEAD
 
     def _remap(self, montage_mapping):
         mne.rename_channels(self.mne_info, montage_mapping)
@@ -373,6 +389,8 @@ class SourceNode(Node):
                                         forward_ch_names=ch_names_fwd, source_bads=source_bads, reciever=self)
         montage_menu.exec()
 
+=======
+>>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
 
 
 class ProcessorNode(Node):
@@ -387,8 +405,11 @@ class ProcessorNode(Node):
         Node.__init__(self)
         with self.not_triggering_reset():
             self.disabled = False
+<<<<<<< HEAD
         self.sender = Communicate()
 
+=======
+>>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
 
     def update(self):
         if self.disabled is True:
@@ -400,7 +421,10 @@ class ProcessorNode(Node):
             return
         else:
             Node.update(self)
+<<<<<<< HEAD
 
+=======
+>>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
 
 
 class OutputNode(Node):

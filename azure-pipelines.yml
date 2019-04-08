@@ -1,0 +1,56 @@
+# Python package
+# Create and test a Python package on multiple Python versions.
+# Add steps that analyze code, save the dist with the build record, publish to a PyPI-compatible index, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/python
+
+trigger:
+- master
+
+jobs:
+
+- job: 'Windows'
+  pool:
+    vmImage: 'VS2017-Win2016'
+  strategy:
+    matrix:
+      Python36:
+        python.version: '3.7'
+    maxParallel: 4
+
+  steps:
+  - checkout: self
+    submodules: true
+  - powershell:
+        Write-Host "##vso[task.prependpath]$env:CONDA\Scripts"
+    displayName: Add conda to PATH
+
+  - powershell: |
+        $env:PYTHON = $env:CONDA
+        $env:PATH = $env:PYTHON + "\envs\cogni;" + $env:PYTHON + "\envs\cogni\Scripts;" + $env:PYTHON + ";" + $env:PYTHON + "\Scripts;" + $env:PATH
+        Write-Host ("##vso[task.setvariable variable=PATH]" + $env:PATH)
+    displayName: Add conda python to PATH
+
+  - script: |
+      conda update --yes conda
+      conda env create -f environment.yml
+    displayName: Create conda env
+
+  - script: 
+        python -c "import sys; print(sys.version)"
+    displayName: Print python version
+
+  - script: |
+      call activate cogni
+      pip install --editable .
+    displayName: Install cognigraph
+
+  - script: |
+      call activate cogni
+      pytest cognigraph --junitxml=junit/test-results.xml
+    displayName: 'Run tests'
+
+  - task: PublishTestResults@2
+    inputs:
+      testResultsFiles: '**/test-results.xml'
+      testRunTitle: 'Python $(python.version)'
+    condition: succeededOrFailed()

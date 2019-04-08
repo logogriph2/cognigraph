@@ -1,8 +1,8 @@
 from pyqtgraph.parametertree import parameterTypes
-from PyQt5 import QtCore, QtGui
+from PyQt5 import QtGui
 import pylsl
 
-from ...helpers.pyqtgraph import MyGroupParameter
+from ...utils.pyqtgraph import MyGroupParameter
 from ...nodes.sources import LSLStreamSource, FileSource
 
 
@@ -70,7 +70,7 @@ class FileSourceControls(SourceControls):
 
         try:
             file_path = pipeline.source.file_path
-        except:
+        except Exception:
             file_path = ''
 
         # Add LineEdit for choosing file

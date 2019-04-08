@@ -1,8 +1,6 @@
 import time
-import os
 import scipy as sc
 
-from typing import Tuple
 import math
 
 from vendor.nfb.pynfb.protocols.ssd.topomap_selector_ica import ICADialog
@@ -17,23 +15,20 @@ from mne.minimum_norm import apply_inverse_raw  # , make_inverse_operator
 from mne.minimum_norm import make_inverse_operator as mne_make_inverse_operator
 from mne.minimum_norm import prepare_inverse_operator
 from mne.beamformer import apply_lcmv_raw
-from ..helpers.make_lcmv import make_lcmv
+from ..utils.make_lcmv import make_lcmv
 
-import nibabel as nib
 from .node import ProcessorNode
-from ..helpers.matrix_functions import (make_time_dimension_second,
-                                        put_time_dimension_back_from_second,
-                                        last_sample)
-from ..helpers.inverse_model import (get_default_forward_file,
-                                     get_clean_forward,
-                                     make_inverse_operator,
-                                     matrix_from_inverse_operator,
-                                     get_mesh_data_from_forward_solution)
+from ..utils.matrix_functions import (make_time_dimension_second,
+                                      put_time_dimension_back_from_second)
+from ..utils.inverse_model import (get_default_forward_file,
+                                   get_clean_forward,
+                                   make_inverse_operator,
+                                   get_mesh_data_from_forward_solution)
 
-from ..helpers.pynfb import (pynfb_ndarray_function_wrapper,
-                             ExponentialMatrixSmoother)
-from ..helpers.channels import channel_labels_saver
-from ..helpers.aux_tools import nostdout
+from ..utils.pynfb import (pynfb_ndarray_function_wrapper,
+                           ExponentialMatrixSmoother)
+from ..utils.channels import channel_labels_saver
+from ..utils.aux_tools import nostdout
 from .. import TIME_AXIS
 from vendor.nfb.pynfb.signal_processing import filters
 
@@ -51,7 +46,7 @@ class Preprocessing(ProcessorNode):
         self._enough_collected = None  # type: bool
         self._means = None  # type: np.ndarray
         self._mean_sums_of_squares = None  # type: np.ndarray
-        self._bad_channel_indices = None  # type: List[int]
+        self._bad_channel_indices = None  # type: list[int]
         self._interpolation_matrix = None  # type: np.ndarray
         self._dsamp_freq = dsamp_freq
 
@@ -168,14 +163,20 @@ class InverseModel(ProcessorNode):
             self.mne_forward_model_file_path, mne_info)
         mne_info['bads'] = list(set(mne_info['bads'] + missing_ch_names))
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
         self.inverse_operator = make_inverse_operator(self.fwd,
                                                       mne_info,
                                                       depth=self.depth,
                                                       loose=self.loose,
                                                       fixed=self.fixed)
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
         self.lambda2 = 1.0 / self.snr ** 2
         self.inverse_operator = prepare_inverse_operator(
             self.inverse_operator, nave=100,
@@ -206,7 +207,11 @@ class InverseModel(ProcessorNode):
             self.inverse_operator = prepare_inverse_operator(
                 self.inverse_operator, nave=100,
                 lambda2=self.lambda2, method=self.method)
+<<<<<<< HEAD
                 # self._inverse_model_matrix = matrix_from_inverse_operator(
+=======
+            # self._inverse_model_matrix = matrix_from_inverse_operator(
+>>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
             #     inverse_operator=self.inverse_operator, mne_info=mne_info,
             #     snr=self.snr, method=self.method)
             self._bad_channels = bads
@@ -418,6 +423,7 @@ class Beamformer(ProcessorNode):
         try:
             fwd, missing_ch_names = get_clean_forward(
                 self.mne_forward_model_file_path, mne_info)
+<<<<<<< HEAD
         except ValueError as ve:
             if len(ve.args)==3:
                 self.sender.montage_signal.emit(ve.args)
@@ -462,6 +468,48 @@ class Beamformer(ProcessorNode):
                         weight_norm='unit-noise-gain', reduce_rank=False)
             else:
                 self._filters = None
+=======
+        except ValueError:
+            raise Exception('BAD FORWARD + DATA COMBINATION!')
+
+        mne_info['bads'] = list(set(mne_info['bads'] + missing_ch_names))
+        self._gain_matrix = fwd['sol']['data']
+        G = self._gain_matrix
+        if self.is_adaptive is False:
+            Rxx = G.dot(G.T)
+        elif self.is_adaptive is True:
+            Rxx = np.zeros([G.shape[0], G.shape[0]])  # G.dot(G.T)
+
+        goods = mne.pick_types(mne_info, eeg=True, meg=False, exclude='bads')
+        ch_names = [mne_info['ch_names'][i] for i in goods]
+
+        self._Rxx = mne.Covariance(Rxx, ch_names, mne_info['bads'],
+                                   mne_info['projs'], nfree=1)
+
+        self.noise_cov = mne.Covariance(G.dot(G.T), ch_names, mne_info['bads'],
+                                        mne_info['projs'], nfree=1)
+        self._mne_info = mne_info
+
+        frequency = mne_info['sfreq']
+        self._forgetting_factor_per_sample = np.power(
+                self.forgetting_factor_per_second, 1 / frequency)
+
+        n_vert = fwd['nsource']
+        channel_labels = ['vertex #{}'.format(i + 1) for i in range(n_vert)]
+        self.mne_info = mne.create_info(channel_labels, frequency)
+        self._initialized_as_adaptive = self.is_adaptive
+        self._initialized_as_fixed = self.fixed_orientation
+
+        self.fwd_surf = mne.convert_forward_solution(
+                    fwd, surf_ori=True, force_fixed=False)
+        if not self.is_adaptive:
+            self._filters = make_lcmv(
+                    info=self._mne_info, forward=self.fwd_surf,
+                    data_cov=self._Rxx, reg=self.reg, pick_ori='max-power',
+                    weight_norm='unit-noise-gain', reduce_rank=False)
+        else:
+            self._filters = None
+>>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
 
     def _update(self):
         t1 = time.time()
@@ -623,11 +671,11 @@ def pynfb_filter_based_processor_class(pynfb_filter_class):
             pass
 
         @property
-        def CHANGES_IN_THESE_REQUIRE_RESET(self) -> Tuple[str]:
+        def CHANGES_IN_THESE_REQUIRE_RESET(self):
             pass
 
         @property
-        def UPSTREAM_CHANGES_IN_THESE_REQUIRE_REINITIALIZATION(self) -> Tuple[str]:
+        def UPSTREAM_CHANGES_IN_THESE_REQUIRE_REINITIALIZATION(self):
             pass
 
         def _reset(self):
@@ -765,7 +813,11 @@ class MCE(ProcessorNode):
 
 class ICARejection(ProcessorNode):
 
+<<<<<<< HEAD
     def __init__(self, collect_for_x_seconds: int=60):
+=======
+    def __init__(self, collect_for_x_seconds: int = 60):
+>>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
         ProcessorNode.__init__(self)
         self.collect_for_x_seconds = collect_for_x_seconds  # type: int
 
@@ -871,7 +923,6 @@ class AtlasViewer(ProcessorNode):
         #     os.path.join(surfaces_dir, 'label', hemi + self.annot_file)
         #     for hemi in ('lh.', 'rh.')]
 
-
     def _reset(self):
         self.active_labels = [l for l in self.labels if l.is_active]
         self.mne_info = {'ch_names': [a.name for a in self.active_labels],
@@ -927,7 +978,6 @@ class AtlasViewer(ProcessorNode):
 
             self.labels = labels
 
-
             # Merge numeric labels and label names from both hemispheres
             # annot_lh = nib.freesurfer.io.read_annot(filepath=annot_files[0])
             # annot_rh = nib.freesurfer.io.read_annot(filepath=annot_files[1])
@@ -978,10 +1028,8 @@ class AtlasViewer(ProcessorNode):
                 self.labels_info.append(label_dict)
 
         except FileNotFoundError:
-            self.logger.error(
-                'Annotation files not found: {}'.format(annot_files))
+            self.logger.error('Annotation files not found')
             # Open file picker dialog here
-            ...
 
     def _update(self):
         data = self.parent.output

@@ -3,29 +3,24 @@ import time
 from types import SimpleNamespace
 
 import tables
-from PyQt5.QtCore import pyqtSignal, QObject,  QThread
-from PyQt5.QtWidgets import QSizePolicy, QApplication
+from PyQt5.QtCore import pyqtSignal, QObject
+from PyQt5.QtWidgets import QApplication
 
 import mne
-import nibabel as nib
 import numpy as np
-import pyqtgraph.opengl as gl
-from matplotlib import cm
-from matplotlib.colors import Colormap as matplotlib_Colormap
-from mne.datasets import sample
 from scipy import sparse
 
-from ..helpers.pysurfer.smoothing_matrix import smoothing_matrix, mesh_edges
+from ..utils.pysurfer.smoothing_matrix import smoothing_matrix, mesh_edges
 from .node import OutputNode
 from .. import CHANNEL_AXIS, TIME_AXIS, PYNFB_TIME_AXIS
-from ..helpers.lsl import (convert_numpy_format_to_lsl,
-                           convert_numpy_array_to_lsl_chunk,
-                           create_lsl_outlet)
-from ..helpers.matrix_functions import last_sample, make_time_dimension_second
-from ..helpers.ring_buffer import RingBuffer
-from ..helpers.channels import read_channel_types, channel_labels_saver
-from ..helpers.inverse_model import get_mesh_data_from_forward_solution
-from ..helpers.brain_visualization import get_mesh_data_from_surfaces_dir
+from ..utils.lsl import (convert_numpy_format_to_lsl,
+                         convert_numpy_array_to_lsl_chunk,
+                         create_lsl_outlet)
+from ..utils.matrix_functions import last_sample, make_time_dimension_second
+from ..utils.ring_buffer import RingBuffer
+from ..utils.channels import read_channel_types, channel_labels_saver
+from ..utils.inverse_model import get_mesh_data_from_forward_solution
+from ..utils.brain_visualization import get_mesh_data_from_surfaces_dir
 from vendor.nfb.pynfb.widgets.signal_viewers import RawSignalViewer
 
 # visbrain visualization imports
@@ -35,7 +30,6 @@ from ..gui.source_obj import SourceObj
 from vispy import scene
 # from vispy.app import Canvas
 
-import torch
 # import logging
 
 # from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
@@ -247,7 +241,6 @@ class BrainViewer(WidgetOutput):
         else:
             return (last_sources - minimum) / (maximum - minimum)
 
-
     def on_draw(self, normalized_values):
         QApplication.processEvents()
         if self.smoothing_matrix is not None:
@@ -371,7 +364,6 @@ class SignalViewer(WidgetOutput):
                                    names=[''],
                                    seconds_to_plot=10)
 
-
     def _update(self):
         chunk = self.parent.output
         self.signal_sender.draw_sig.emit(chunk)
@@ -456,6 +448,10 @@ class TorchOutput(OutputNode):
         pass
 
     def _update(self):
+<<<<<<< HEAD
+=======
+        import torch
+>>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
         self.output = torch.from_numpy(self.parent.output)
 
 
@@ -495,7 +491,7 @@ class ConnectivityViewer(WidgetOutput):
         # 3. Get nodes = xyz of these vertices
         nodes = self.mesh._vertices[nodes_inds_surf]
         # 4. Edges are input data restricted to best n_lines nodes
-        edges = input_data[nodes_inds[:,None], nodes_inds]  # None needed
+        edges = input_data[nodes_inds[:, None], nodes_inds]  # None needed
         # 5. Select = mask matrix with True in (i,j)-th positions
         select = np.zeros_like(input_data, dtype=bool)
         select[ii, jj] = True

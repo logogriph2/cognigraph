@@ -5,8 +5,11 @@ cache: pip
 
 before_install:
 
+<<<<<<< HEAD
     # Here we just install Miniconda, which you shouldn't have to change.
 
+=======
+>>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
     - wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
     - chmod +x miniconda.sh
     - ./miniconda.sh -b
@@ -14,6 +17,7 @@ before_install:
     - conda update --yes conda
 
 install:
+<<<<<<< HEAD
     - conda create --yes -n test python=$TRAVIS_PYTHON_VERSION
     - source activate test
     - conda install --yes -c tstenner pylsl
@@ -36,3 +40,16 @@ install:
 
 script:
     - pytest cognigraph/
+=======
+    - conda env create -f environment.yml
+    - source activate cogni
+    - pip install -e .
+
+script:
+    - pytest cognigraph/ --cov
+    - flake8 --count cognigraph
+
+after_success:
+    - codecov
+
+>>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
