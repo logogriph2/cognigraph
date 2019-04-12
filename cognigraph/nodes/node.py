@@ -8,6 +8,30 @@ from mne.io.pick import channel_type
 from ..utils.misc import class_name_of
 import logging
 
+from PyQt5.QtCore import pyqtSignal, QObject, pyqtSlot
+from ..gui.montage_menu import MontageMenu
+
+import mne
+
+class Communicate(QObject):
+    """Pyqt signals sender"""
+    montage_signal = pyqtSignal(tuple)
+
+class Reciever(QObject):
+    @pyqtSlot(tuple)
+    def __init__(self, source):
+        super().__init__()
+        self.source = source
+
+    def on_montageError(self, args):
+        ch_names_source, ch_names_fwd, source_bads = args
+        montage_menu = MontageMenu(source_ch_names=ch_names_source,
+                                        forward_ch_names=ch_names_fwd, source_bads=source_bads, reciever=self)
+        montage_menu.exec()
+
+    def changeMontage(self, montage_mapping):
+        self.source._remap(montage_mapping)
+
 
 class Node(object):
     """
@@ -289,6 +313,7 @@ class SourceNode(Node):
     def __init__(self):
         Node.__init__(self)
         self.mne_info = None
+        self.reciever = Reciever(self)
 
     def initialize(self):
         self.mne_info = None
@@ -337,6 +362,17 @@ class SourceNode(Node):
         raise NotImplementedError
         # super()._on_input_history_invalidation()
 
+    def _remap(self, montage_mapping):
+        mne.rename_channels(self.mne_info, montage_mapping)
+        for child in self._children:
+            child.chain_initialize()
+
+    def on_montageError(self, args):
+        ch_names_source, ch_names_fwd, source_bads = args
+        montage_menu = MontageMenu(source_ch_names=ch_names_source,
+                                        forward_ch_names=ch_names_fwd, source_bads=source_bads, reciever=self)
+        montage_menu.exec()
+
 
 class ProcessorNode(Node):
     """
@@ -349,6 +385,7 @@ class ProcessorNode(Node):
         Node.__init__(self)
         with self.not_triggering_reset():
             self.disabled = False
+        self.sender = Communicate()
 
     def update(self):
         if self.disabled is True:

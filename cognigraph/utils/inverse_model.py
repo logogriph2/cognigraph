@@ -139,9 +139,15 @@ def get_clean_forward(forward_model_path: str, mne_info: mne.Info):
     missing_ch_names = [n for n in ch_names_data if
                         n.upper() not in all_upper(ch_names_fwd)]
 
+    missing_fwd_ch_names = [n for n in ch_names_fwd if
+                        n.upper() not in all_upper(ch_names_data)]
+
+    if len(missing_fwd_ch_names) > 0:
+        raise ValueError(mne_info['ch_names'],ch_names_fwd,mne_info['bads'])
+
+
     fwd = mne.pick_channels_forward(forward, include=ch_names_intersect)
     return fwd, missing_ch_names
-
 
 def make_inverse_operator(fwd, mne_info, depth=None,
                           loose=1, fixed=False):

@@ -160,29 +160,39 @@ class InverseModel(ProcessorNode):
             self._default_forward_model_file_path =\
                 get_default_forward_file(mne_info)
 
-        self.fwd, missing_ch_names = get_clean_forward(
-            self.mne_forward_model_file_path, mne_info)
-        mne_info['bads'] = list(set(mne_info['bads'] + missing_ch_names))
+        self.sender.montage_signal.connect(self._root.reciever.on_montageError)
+        is_ok = True
 
-        self.inverse_operator = make_inverse_operator(self.fwd,
-                                                      mne_info,
-                                                      depth=self.depth,
-                                                      loose=self.loose,
-                                                      fixed=self.fixed)
-        self.lambda2 = 1.0 / self.snr ** 2
-        self.inverse_operator = prepare_inverse_operator(
-            self.inverse_operator, nave=100,
-            lambda2=self.lambda2, method=self.method)
-        # self._inverse_model_matrix = matrix_from_inverse_operator(
-        #     inverse_operator=self.inverse_operator, mne_info=mne_info,
-        #     snr=self.snr, method=self.method)
+        try:
+            self.fwd, missing_ch_names = get_clean_forward(
+                self.mne_forward_model_file_path, mne_info)
+            mne_info['bads'] = list(set(mne_info['bads'] + missing_ch_names))
+        except ValueError as ve:
+            if len(ve.args) == 3:
+                self.sender.montage_signal.emit(ve.args)
+                is_ok = False
+            else:
+                raise Exception('BAD FORWARD + DATA COMBINATION!')
+        if is_ok:
+            self.inverse_operator = make_inverse_operator(self.fwd,
+                                                          mne_info,
+                                                          depth=self.depth,
+                                                          loose=self.loose,
+                                                          fixed=self.fixed)
+            self.lambda2 = 1.0 / self.snr ** 2
+            self.inverse_operator = prepare_inverse_operator(
+                self.inverse_operator, nave=100,
+                lambda2=self.lambda2, method=self.method)
+            # self._inverse_model_matrix = matrix_from_inverse_operator(
+            #     inverse_operator=self.inverse_operator, mne_info=mne_info,
+            #     snr=self.snr, method=self.method)
 
-        frequency = mne_info['sfreq']
-        # channel_count = self._inverse_model_matrix.shape[0]
-        channel_count = self.fwd['nsource']
-        channel_labels = ['vertex #{}'.format(i + 1)
-                          for i in range(channel_count)]
-        self.mne_info = mne.create_info(channel_labels, frequency)
+            frequency = mne_info['sfreq']
+            # channel_count = self._inverse_model_matrix.shape[0]
+            channel_count = self.fwd['nsource']
+            channel_labels = ['vertex #{}'.format(i + 1)
+                              for i in range(channel_count)]
+            self.mne_info = mne.create_info(channel_labels, frequency)
 
     def _update(self):
         mne_info = self.traverse_back_and_find('mne_info')
@@ -405,49 +415,57 @@ class Beamformer(ProcessorNode):
             self._default_forward_model_file_path = get_default_forward_file(
                     mne_info)
 
+        self.sender.montage_signal.connect(self._root.reciever.on_montageError)
+        is_ok = True
+
         try:
             fwd, missing_ch_names = get_clean_forward(
                 self.mne_forward_model_file_path, mne_info)
-        except ValueError:
-            raise Exception('BAD FORWARD + DATA COMBINATION!')
+        except ValueError as ve:
+            if len(ve.args) == 3:
+                self.sender.montage_signal.emit(ve.args)
+                is_ok = False
+            else:
+                raise Exception('BAD FORWARD + DATA COMBINATION!')
+        if is_ok:
+            mne_info['bads'] = list(set(mne_info['bads'] + missing_ch_names))
+            self._gain_matrix = fwd['sol']['data']
+            G = self._gain_matrix
+            if self.is_adaptive is False:
+                Rxx = G.dot(G.T)
+            elif self.is_adaptive is True:
+                Rxx = np.zeros([G.shape[0], G.shape[0]])  # G.dot(G.T)
 
-        mne_info['bads'] = list(set(mne_info['bads'] + missing_ch_names))
-        self._gain_matrix = fwd['sol']['data']
-        G = self._gain_matrix
-        if self.is_adaptive is False:
-            Rxx = G.dot(G.T)
-        elif self.is_adaptive is True:
-            Rxx = np.zeros([G.shape[0], G.shape[0]])  # G.dot(G.T)
+            goods = mne.pick_types(mne_info, eeg=True, meg=False, exclude='bads')
+            ch_names = [mne_info['ch_names'][i] for i in goods]
 
-        goods = mne.pick_types(mne_info, eeg=True, meg=False, exclude='bads')
-        ch_names = [mne_info['ch_names'][i] for i in goods]
+            self._Rxx = mne.Covariance(Rxx, ch_names, mne_info['bads'],
+                                       mne_info['projs'], nfree=1)
 
-        self._Rxx = mne.Covariance(Rxx, ch_names, mne_info['bads'],
-                                   mne_info['projs'], nfree=1)
+            self.noise_cov = mne.Covariance(G.dot(G.T), ch_names, mne_info['bads'],
+                                            mne_info['projs'], nfree=1)
+            self._mne_info = mne_info
 
-        self.noise_cov = mne.Covariance(G.dot(G.T), ch_names, mne_info['bads'],
-                                        mne_info['projs'], nfree=1)
-        self._mne_info = mne_info
+            frequency = mne_info['sfreq']
+            self._forgetting_factor_per_sample = np.power(
+                    self.forgetting_factor_per_second, 1 / frequency)
 
-        frequency = mne_info['sfreq']
-        self._forgetting_factor_per_sample = np.power(
-                self.forgetting_factor_per_second, 1 / frequency)
+            n_vert = fwd['nsource']
+            channel_labels = ['vertex #{}'.format(i + 1) for i in range(n_vert)]
+            self.mne_info = mne.create_info(channel_labels, frequency)
+            self._initialized_as_adaptive = self.is_adaptive
+            self._initialized_as_fixed = self.fixed_orientation
 
-        n_vert = fwd['nsource']
-        channel_labels = ['vertex #{}'.format(i + 1) for i in range(n_vert)]
-        self.mne_info = mne.create_info(channel_labels, frequency)
-        self._initialized_as_adaptive = self.is_adaptive
-        self._initialized_as_fixed = self.fixed_orientation
-
-        self.fwd_surf = mne.convert_forward_solution(
-                    fwd, surf_ori=True, force_fixed=False)
-        if not self.is_adaptive:
-            self._filters = make_lcmv(
-                    info=self._mne_info, forward=self.fwd_surf,
-                    data_cov=self._Rxx, reg=self.reg, pick_ori='max-power',
-                    weight_norm='unit-noise-gain', reduce_rank=False)
-        else:
-            self._filters = None
+            self.fwd_surf = mne.convert_forward_solution(
+                        fwd, surf_ori=True, force_fixed=False)
+            if not self.is_adaptive:
+                self._filters = make_lcmv(
+                        info=self._mne_info, forward=self.fwd_surf,
+                        data_cov=self._Rxx, reg=self.reg, pick_ori='max-power',
+                        weight_norm='unit-noise-gain', reduce_rank=False)
+            else:
+                self._filters = None
+            print('beamformer nchan',self.mne_info['nchan'])
 
     def _update(self):
         t1 = time.time()
