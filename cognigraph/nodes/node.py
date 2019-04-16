@@ -23,7 +23,7 @@ class Reciever(QObject):
         super().__init__()
         self.source = source
 
-    def on_montageError(self, args):
+    def on_montage_error(self, args):
         ch_names_source, ch_names_fwd, source_bads = args
         montage_menu = MontageMenu(source_ch_names=ch_names_source,
                                         forward_ch_names=ch_names_fwd, source_bads=source_bads, reciever=self)
@@ -367,10 +367,11 @@ class SourceNode(Node):
         for child in self._children:
             child.chain_initialize()
 
-    def on_montageError(self, args):
+    def on_montage_error(self, args):
         ch_names_source, ch_names_fwd, source_bads = args
         montage_menu = MontageMenu(source_ch_names=ch_names_source,
-                                        forward_ch_names=ch_names_fwd, source_bads=source_bads, reciever=self)
+                                   forward_ch_names=ch_names_fwd,
+                                   source_bads=source_bads, reciever=self)
         montage_menu.exec()
 
 

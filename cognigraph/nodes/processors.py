@@ -160,7 +160,7 @@ class InverseModel(ProcessorNode):
             self._default_forward_model_file_path =\
                 get_default_forward_file(mne_info)
 
-        self.sender.montage_signal.connect(self._root.reciever.on_montageError)
+        self.sender.montage_signal.connect(self._root.reciever.on_montage_error)
         is_ok = True
 
         try:
@@ -415,7 +415,7 @@ class Beamformer(ProcessorNode):
             self._default_forward_model_file_path = get_default_forward_file(
                     mne_info)
 
-        self.sender.montage_signal.connect(self._root.reciever.on_montageError)
+        self.sender.montage_signal.connect(self._root.reciever.on_montage_error)
         is_ok = True
 
         try:
