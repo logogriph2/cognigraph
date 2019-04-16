@@ -146,7 +146,6 @@ def get_clean_forward(forward_model_path: str, mne_info: mne.Info):
     if len(missing_fwd_ch_names) > 0:
         raise ValueError(mne_info['ch_names'],ch_names_fwd,mne_info['bads'])
 
-
     fwd = mne.pick_channels_forward(forward, include=ch_names_intersect)
     return fwd, missing_ch_names
 

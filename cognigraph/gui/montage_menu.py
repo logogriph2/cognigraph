@@ -22,7 +22,6 @@ class MontageMenu(QDialog):
         self.reciever = reciever
         print('reciever:',self.reciever)
         print('reciever.source',self.reciever.source)
-        #self.montage_changed_signal.connect(self.reciever.source._remap)
 
         self.initUI()
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
@@ -34,8 +33,8 @@ class MontageMenu(QDialog):
         grid_layout = QtWidgets.QGridLayout()
         self.setLayout(grid_layout)
 
-        self.table = QtWidgets.QTableWidget(self)  # Создаём таблицу
-        self.table.setColumnCount(2)  # Устанавливаем три колонки
+        self.table = QtWidgets.QTableWidget(self)
+        self.table.setColumnCount(2)
         self.max_ch_names = max(len(self.source_ch_names), len(self.forward_ch_names))
         self.table.setRowCount(self.max_ch_names)
 
@@ -83,8 +82,6 @@ class MontageMenu(QDialog):
     def move_ch_names(self):
         for k in range(min(len(self.source_ch_names), len(self.forward_ch_names))):
             self.table.item(k,0).setText(str(self.table.item(k,1).data(0)))
-        #montage_mapping = {self.source_ch_names[k]: str(self.table.item(k, 0).data(0)) for k in
-        #            range(len(self.forward_ch_names))}
         self.redraw_table()
 
     def redraw_table(self):
@@ -105,17 +102,3 @@ class MontageMenu(QDialog):
         duplicate_set = set([ch_name for ch_name in ch_names_lst if ch_names_lst.count(ch_name) > 1])
         print('duplecate_set', duplicate_set)
         return duplicate_set
-
-    def redraw_table2(self):
-        duplicate_set = self.check_duplicate()
-        for k in range(len(self.source_ch_names)):
-            if str(self.table.item(k,0).data(0)) in self.source_bads:
-                self.table.item(k, 0).setBackground(QtGui.QBrush(QtGui.QColor(250, 75, 0)))
-            elif str(self.table.item(k,0).data(0)) == str(self.table.item(k,1).data(0)):
-                self.table.item(k, 0).setBackground(QtGui.QBrush(QtGui.QColor(250, 250, 250)))
-            #elif str(self.table.item(k, 0).data(0)) in duplicate_set:
-            #    self.table.item(k, 0).setBackground(QtGui.QBrush(QtGui.QColor(250, 0, 0)))
-            elif k < len(self.forward_ch_names):
-                self.table.item(k, 0).setBackground(QtGui.QBrush(QtGui.QColor(250, 250, 0)))
-            else:
-                self.table.item(k, 0).setBackground(QtGui.QBrush(QtGui.QColor(250, 125, 0)))
