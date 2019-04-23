@@ -1,27 +1,13 @@
 import pytest
 from cognigraph.nodes.processors import Beamformer
 from cognigraph.nodes.sources import FileSource
-<<<<<<< HEAD
-from cognigraph import COGNIGRAPH_ROOT
-from cognigraph.nodes.tests.prepare_inv_tests_data import info  # noqa
-import os.path as op
-import numpy as np
-
-test_data_path = op.join(COGNIGRAPH_ROOT,  'tests/data')
-
-
-@pytest.fixture  # noqa
-def beamformer(info):
-    fwd_model_path = op.join(test_data_path, 'dmalt_custom_lr-fwd.fif')
-=======
 from cognigraph.nodes.tests.prepare_inv_tests_data import (info,  # noqa
                                                            fwd_model_path)
 import numpy as np
 
 
-@pytest.fixture
+@pytest.fixture # noqa
 def beamformer(info, fwd_model_path):  # noqa
->>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
     is_adaptive = True
     beamformer = Beamformer(forward_model_path=fwd_model_path,
                             is_adaptive=is_adaptive)
@@ -35,13 +21,8 @@ def beamformer(info, fwd_model_path):  # noqa
     return beamformer
 
 
-<<<<<<< HEAD
-@pytest.fixture  # noqa
-def beamformer_def(info):
-=======
-@pytest.fixture
+@pytest.fixture # noqa
 def beamformer_def(info):  # noqa
->>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
     beamformer_def = Beamformer()
     parent = FileSource()
     parent.mne_info = info
@@ -71,4 +52,4 @@ def test_update(beamformer):
 
 def test_check_value(beamformer):
     with pytest.raises(ValueError):
-        beamformer.reg = -1
+        beamformer.reg = -1 # noqa

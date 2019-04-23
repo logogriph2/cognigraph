@@ -32,6 +32,7 @@ from ..utils.aux_tools import nostdout
 from .. import TIME_AXIS
 from vendor.nfb.pynfb.signal_processing import filters
 
+
 class Preprocessing(ProcessorNode):
     CHANGES_IN_THESE_REQUIRE_RESET = ('collect_for_x_seconds', )
     UPSTREAM_CHANGES_IN_THESE_REQUIRE_REINITIALIZATION = ('mne_info', )
@@ -159,7 +160,8 @@ class InverseModel(ProcessorNode):
             self._default_forward_model_file_path =\
                 get_default_forward_file(mne_info)
 
-        self.sender.montage_signal.connect(self._root.reciever.on_montage_error)
+        self.sender.montage_signal.connect(
+            self._root.reciever.on_montage_error)
         is_ok = True
 
         try:
@@ -178,11 +180,6 @@ class InverseModel(ProcessorNode):
                                                           depth=self.depth,
                                                           loose=self.loose,
                                                           fixed=self.fixed)
-<<<<<<< HEAD
-
-
-=======
->>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
             self.lambda2 = 1.0 / self.snr ** 2
             self.inverse_operator = prepare_inverse_operator(
                 self.inverse_operator, nave=100,
@@ -213,13 +210,6 @@ class InverseModel(ProcessorNode):
             self.inverse_operator = prepare_inverse_operator(
                 self.inverse_operator, nave=100,
                 lambda2=self.lambda2, method=self.method)
-<<<<<<< HEAD
-                # self._inverse_model_matrix = matrix_from_inverse_operator(
-=======
-            # self._inverse_model_matrix = matrix_from_inverse_operator(
->>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
-            #     inverse_operator=self.inverse_operator, mne_info=mne_info,
-            #     snr=self.snr, method=self.method)
             self._bad_channels = bads
 
         input_array = self.parent.output
@@ -423,7 +413,8 @@ class Beamformer(ProcessorNode):
             self._default_forward_model_file_path = get_default_forward_file(
                     mne_info)
 
-        self.sender.montage_signal.connect(self._root.reciever.on_montage_error)
+        self.sender.montage_signal.connect(
+            self._root.reciever.on_montage_error)
         is_ok = True
 
         try:
@@ -434,7 +425,6 @@ class Beamformer(ProcessorNode):
                 self.sender.montage_signal.emit(ve.args)
                 is_ok = False
             else:
-            else:
                 raise Exception('BAD FORWARD + DATA COMBINATION!')
         if is_ok:
             mne_info['bads'] = list(set(mne_info['bads'] + missing_ch_names))
@@ -445,14 +435,16 @@ class Beamformer(ProcessorNode):
             elif self.is_adaptive is True:
                 Rxx = np.zeros([G.shape[0], G.shape[0]])  # G.dot(G.T)
 
-            goods = mne.pick_types(mne_info, eeg=True, meg=False, exclude='bads')
+            goods = mne.pick_types(
+                mne_info, eeg=True, meg=False, exclude='bads')
             ch_names = [mne_info['ch_names'][i] for i in goods]
 
             self._Rxx = mne.Covariance(Rxx, ch_names, mne_info['bads'],
                                        mne_info['projs'], nfree=1)
 
-            self.noise_cov = mne.Covariance(G.dot(G.T), ch_names, mne_info['bads'],
-                                            mne_info['projs'], nfree=1)
+            self.noise_cov = mne.Covariance(
+                G.dot(G.T), ch_names, mne_info['bads'],
+                mne_info['projs'], nfree=1)
             self._mne_info = mne_info
 
             frequency = mne_info['sfreq']
@@ -460,7 +452,8 @@ class Beamformer(ProcessorNode):
                     self.forgetting_factor_per_second, 1 / frequency)
 
             n_vert = fwd['nsource']
-            channel_labels = ['vertex #{}'.format(i + 1) for i in range(n_vert)]
+            channel_labels = ['vertex #{}'.format(i + 1)
+                              for i in range(n_vert)]
             self.mne_info = mne.create_info(channel_labels, frequency)
             self._initialized_as_adaptive = self.is_adaptive
             self._initialized_as_fixed = self.fixed_orientation
@@ -474,7 +467,6 @@ class Beamformer(ProcessorNode):
                         weight_norm='unit-noise-gain', reduce_rank=False)
             else:
                 self._filters = None
-=======
                 raise Exception('BAD FORWARD + DATA COMBINATION!')
         if is_ok:
             mne_info['bads'] = list(set(mne_info['bads'] + missing_ch_names))
@@ -485,13 +477,15 @@ class Beamformer(ProcessorNode):
             elif self.is_adaptive is True:
                 Rxx = np.zeros([G.shape[0], G.shape[0]])  # G.dot(G.T)
 
-            goods = mne.pick_types(mne_info, eeg=True, meg=False, exclude='bads')
+            goods = mne.pick_types(mne_info,
+                                   eeg=True, meg=False, exclude='bads')
             ch_names = [mne_info['ch_names'][i] for i in goods]
 
             self._Rxx = mne.Covariance(Rxx, ch_names, mne_info['bads'],
                                        mne_info['projs'], nfree=1)
 
-            self.noise_cov = mne.Covariance(G.dot(G.T), ch_names, mne_info['bads'],
+            self.noise_cov = mne.Covariance(G.dot(G.T),
+                                            ch_names, mne_info['bads'],
                                             mne_info['projs'], nfree=1)
             self._mne_info = mne_info
 
@@ -500,7 +494,8 @@ class Beamformer(ProcessorNode):
                     self.forgetting_factor_per_second, 1 / frequency)
 
             n_vert = fwd['nsource']
-            channel_labels = ['vertex #{}'.format(i + 1) for i in range(n_vert)]
+            channel_labels = ['vertex #{}'.format(i + 1)
+                              for i in range(n_vert)]
             self.mne_info = mne.create_info(channel_labels, frequency)
             self._initialized_as_adaptive = self.is_adaptive
             self._initialized_as_fixed = self.fixed_orientation
@@ -514,7 +509,6 @@ class Beamformer(ProcessorNode):
                         weight_norm='unit-noise-gain', reduce_rank=False)
             else:
                 self._filters = None
-            print('beamformer nchan',self.mne_info['nchan'])
 
     def _update(self):
         t1 = time.time()
@@ -818,11 +812,7 @@ class MCE(ProcessorNode):
 
 class ICARejection(ProcessorNode):
 
-<<<<<<< HEAD
-    def __init__(self, collect_for_x_seconds: int=60):
-=======
     def __init__(self, collect_for_x_seconds: int = 60):
->>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
         ProcessorNode.__init__(self)
         self.collect_for_x_seconds = collect_for_x_seconds  # type: int
 

@@ -366,11 +366,7 @@ class _FwdGeomGroupbox(_StateAwareGroupbox):
 
     def _get_builtin_montages(self):
         montages_desc_path = op.join(COGNIGRAPH_DATA, 'montages_desc.json')
-<<<<<<< HEAD
-        with open(montages_desc_path, 'r', encoding='utf8') as f:
-=======
         with open(montages_desc_path, 'r') as f:
->>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
             description = json.load(f)
             self.montages_desc = description['montages']
             self.spacings_desc = description['spacings']
@@ -685,12 +681,8 @@ class ComputeFwdInThread(ThreadToBeWaitedFor):
         montage_kind = op.splitext(op.basename(montage))[0]
         fwd_name = '-'.join([subject, 'eeg', spacing, montage_kind, 'fwd.fif'])
         self.fwd_savename = op.join(dest_dir, montage_kind, spacing, fwd_name)
-
-<<<<<<< HEAD
-=======
         self._logger = logging.getLogger(type(self).__name__)
 
->>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
     def no_blocking_execution(self):
         if op.isfile(self.fwd_savename):
             ans = QMessageBox.question(

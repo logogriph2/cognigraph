@@ -1,19 +1,15 @@
-import os.path as op
 import numpy as np
 
 import pytest
 from cognigraph.nodes.processors import MCE
 from cognigraph.nodes.sources import FileSource
-from cognigraph import COGNIGRAPH_ROOT
-from cognigraph.nodes.tests.prepare_inv_tests_data import info  # noqa
-
-test_data_path = op.join(COGNIGRAPH_ROOT,  'tests/data')
+from cognigraph.nodes.tests.prepare_inv_tests_data import (info,  # noqa
+                                                           fwd_model_path)
 
 
-@pytest.fixture  # noqa
-def mce(info):
+@pytest.fixture# noqa
+def mce(info, fwd_model_path):  # noqa
     snr = 1
-    fwd_model_path = op.join(test_data_path, 'dmalt_custom_lr-fwd.fif')
     n_comp = 10
     mce = MCE(snr, fwd_model_path, n_comp)
     mce.mne_info = info
@@ -26,8 +22,8 @@ def mce(info):
     return mce
 
 
-@pytest.fixture  # noqa
-def mce_def(info):
+@pytest.fixture# noqa
+def mce_def(info):  # noqa
     mce_def = MCE()
     parent = FileSource()
     parent.mne_info = info

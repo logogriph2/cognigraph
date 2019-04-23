@@ -48,11 +48,7 @@ class GUIWindow(QMainWindow):
         self._controls_widget.setMinimumWidth(800)
         # --------------------------------- #
 
-<<<<<<< HEAD
-        file_menu = self.menuBar().addMenu('&File')
-=======
         self.menuBar().addMenu('&File')  # file menu
->>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
 
         # -------- view menu & toolbar -------- #
         tile_windows_action = self.createAction(

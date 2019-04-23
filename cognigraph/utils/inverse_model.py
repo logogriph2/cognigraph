@@ -14,8 +14,8 @@ standard_1005_forward_file_path = os.path.join(
     sample_dir, 'sample_1005-eeg-oct-6-fwd.fif')
 
 
-
-def _pick_columns_from_matrix(matrix: np.ndarray, output_column_labels: list,
+def _pick_columns_from_matrix(matrix: np.ndarray,
+                              output_column_labels: list,
                               input_column_labels: list) -> np.ndarray:
     """
     From matrix take only the columns that correspond to
@@ -141,13 +141,13 @@ def get_clean_forward(forward_model_path: str, mne_info: mne.Info):
                         n.upper() not in all_upper(ch_names_fwd)]
 
     missing_fwd_ch_names = [n for n in ch_names_fwd if
-                        n.upper() not in all_upper(ch_names_data)]
+                            n.upper() not in all_upper(ch_names_data)]
 
     if len(missing_fwd_ch_names) > 0:
-        raise ValueError(mne_info['ch_names'],ch_names_fwd,mne_info['bads'])
+        raise ValueError(mne_info['ch_names'], ch_names_fwd, mne_info['bads'])
 
     missing_fwd_ch_names = [n for n in ch_names_fwd if
-                        n.upper() not in all_upper(ch_names_data)]
+                            n.upper() not in all_upper(ch_names_data)]
 
     if len(missing_fwd_ch_names) > 0:
         raise ValueError(mne_info['ch_names'], ch_names_fwd, mne_info['bads'])

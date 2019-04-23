@@ -13,9 +13,11 @@ from ..gui.montage_menu import MontageMenu
 
 import mne
 
+
 class Communicate(QObject):
     """Pyqt signals sender"""
     montage_signal = pyqtSignal(tuple)
+
 
 class Reciever(QObject):
     @pyqtSlot(tuple)
@@ -26,14 +28,13 @@ class Reciever(QObject):
     def on_montage_error(self, args):
         ch_names_source, ch_names_fwd, source_bads = args
         montage_menu = MontageMenu(source_ch_names=ch_names_source,
-                                        forward_ch_names=ch_names_fwd, source_bads=source_bads, reciever=self)
+                                   forward_ch_names=ch_names_fwd,
+                                   source_bads=source_bads, reciever=self)
         montage_menu.exec()
 
     def changeMontage(self, montage_mapping):
         self.source._remap(montage_mapping)
 
-=======
->>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
 
 class Node(object):
     """
@@ -189,19 +190,11 @@ class Node(object):
     def parent(self, new_parent):
         if self._parent is new_parent:  # covers the case when both are None
             return
-<<<<<<< HEAD
 
         # Tell the previous parent about disconnection
         if self._parent is not None:
             self._parent._children.remove(self)
 
-=======
-
-        # Tell the previous parent about disconnection
-        if self._parent is not None:
-            self._parent._children.remove(self)
-
->>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
         self._parent = new_parent
 
         # Tell the new input node about the connection
@@ -322,12 +315,7 @@ class SourceNode(Node):
 
     def __init__(self):
         Node.__init__(self)
-<<<<<<< HEAD
         self.mne_info = None  # type: mne.Info
-        self.reciever = Reciever(self)
-
-=======
-        self.mne_info = None
         self.reciever = Reciever(self)
 
     def initialize(self):
@@ -376,21 +364,6 @@ class SourceNode(Node):
     def _on_input_history_invalidation(self):
         raise NotImplementedError
         # super()._on_input_history_invalidation()
-<<<<<<< HEAD
-
-    def _remap(self, montage_mapping):
-        mne.rename_channels(self.mne_info, montage_mapping)
-        for child in self._children:
-            child.chain_initialize()
-
-    def on_montageError(self, args):
-        ch_names_source, ch_names_fwd, source_bads = args
-        montage_menu = MontageMenu(source_ch_names=ch_names_source,
-                                        forward_ch_names=ch_names_fwd, source_bads=source_bads, reciever=self)
-        montage_menu.exec()
-
-=======
->>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
 
     def _remap(self, montage_mapping):
         mne.rename_channels(self.mne_info, montage_mapping)
@@ -420,9 +393,6 @@ class ProcessorNode(Node):
         self.sender = Communicate()
         self.sender = Communicate()
 
-=======
->>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
-
     def update(self):
         if self.disabled is True:
             self.output = self.parent.output
@@ -433,10 +403,6 @@ class ProcessorNode(Node):
             return
         else:
             Node.update(self)
-<<<<<<< HEAD
-
-=======
->>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
 
 
 class OutputNode(Node):

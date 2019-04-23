@@ -448,10 +448,7 @@ class TorchOutput(OutputNode):
         pass
 
     def _update(self):
-<<<<<<< HEAD
-=======
         import torch
->>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
         self.output = torch.from_numpy(self.parent.output)
 
 

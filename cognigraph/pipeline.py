@@ -45,11 +45,7 @@ class Pipeline(object):
     def source(self, parent):
         self._source = parent
         self._reconnect_the_first_processor(parent)
-<<<<<<< HEAD
-        self._reconnect_outputs_to_last_node()  # In case some outputs were added before anything else
-=======
         self._reconnect_outputs_to_last_node()
->>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
 
     @property
     def all_nodes(self) -> List[Node]:
@@ -88,12 +84,6 @@ class Pipeline(object):
         # keep track of those Nones.
         self._inputs_of_outputs.append(parent)
         output_node.parent = parent or self._last_node_before_outputs()
-<<<<<<< HEAD
-        # else:
-        #     msg = "Trying to add a {} that has already been added".format(class_name_of(output_node))
-        #     raise ValueError(msg)
-=======
->>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94
 
     def _last_node_before_outputs(self):
         try:
