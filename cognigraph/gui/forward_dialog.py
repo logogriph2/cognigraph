@@ -366,7 +366,7 @@ class _FwdGeomGroupbox(_StateAwareGroupbox):
 
     def _get_builtin_montages(self):
         montages_desc_path = op.join(COGNIGRAPH_DATA, 'montages_desc.json')
-        with open(montages_desc_path, 'r') as f:
+        with open(montages_desc_path, 'r', encoding='utf8') as f:
             description = json.load(f)
             self.montages_desc = description['montages']
             self.spacings_desc = description['spacings']

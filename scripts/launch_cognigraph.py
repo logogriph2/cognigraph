@@ -1,5 +1,3 @@
-"""Launch main cognigraph gui window"""
-
 import argparse
 import sys
 import os.path as op
@@ -123,21 +121,6 @@ def assemble_pipeline(file_path=None, fwd_path=None, subject=None,
 
 def main():
 
-<<<<<<< HEAD:scripts/launch_test.py
-def on_main_window_close():
-    thread.stop()
-    thread.wait(100)
-    app.processEvents()
-    thread.quit()
-    try:
-        logger.info('Deleting main window ...')
-        window.deleteLater()
-    except RuntimeError:
-        logger.info('Window has already been deleted')
-
-
-if __name__ == '__main__':
-=======
     def on_main_window_close():
         thread.stop()
         thread.wait(100)
@@ -149,7 +132,6 @@ if __name__ == '__main__':
         except RuntimeError:
             logger.info('Window has already been deleted')
 
->>>>>>> 8282a5628ef42a24f61e0561d32de8c1ebc25c94:scripts/launch_cognigraph.py
     app = QtWidgets.QApplication(sys.argv)
 
     logger.debug('Assembling pipeline')

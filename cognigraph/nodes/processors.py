@@ -467,48 +467,6 @@ class Beamformer(ProcessorNode):
                         weight_norm='unit-noise-gain', reduce_rank=False)
             else:
                 self._filters = None
-                raise Exception('BAD FORWARD + DATA COMBINATION!')
-        if is_ok:
-            mne_info['bads'] = list(set(mne_info['bads'] + missing_ch_names))
-            self._gain_matrix = fwd['sol']['data']
-            G = self._gain_matrix
-            if self.is_adaptive is False:
-                Rxx = G.dot(G.T)
-            elif self.is_adaptive is True:
-                Rxx = np.zeros([G.shape[0], G.shape[0]])  # G.dot(G.T)
-
-            goods = mne.pick_types(mne_info,
-                                   eeg=True, meg=False, exclude='bads')
-            ch_names = [mne_info['ch_names'][i] for i in goods]
-
-            self._Rxx = mne.Covariance(Rxx, ch_names, mne_info['bads'],
-                                       mne_info['projs'], nfree=1)
-
-            self.noise_cov = mne.Covariance(G.dot(G.T),
-                                            ch_names, mne_info['bads'],
-                                            mne_info['projs'], nfree=1)
-            self._mne_info = mne_info
-
-            frequency = mne_info['sfreq']
-            self._forgetting_factor_per_sample = np.power(
-                    self.forgetting_factor_per_second, 1 / frequency)
-
-            n_vert = fwd['nsource']
-            channel_labels = ['vertex #{}'.format(i + 1)
-                              for i in range(n_vert)]
-            self.mne_info = mne.create_info(channel_labels, frequency)
-            self._initialized_as_adaptive = self.is_adaptive
-            self._initialized_as_fixed = self.fixed_orientation
-
-            self.fwd_surf = mne.convert_forward_solution(
-                        fwd, surf_ori=True, force_fixed=False)
-            if not self.is_adaptive:
-                self._filters = make_lcmv(
-                        info=self._mne_info, forward=self.fwd_surf,
-                        data_cov=self._Rxx, reg=self.reg, pick_ori='max-power',
-                        weight_norm='unit-noise-gain', reduce_rank=False)
-            else:
-                self._filters = None
 
     def _update(self):
         t1 = time.time()
